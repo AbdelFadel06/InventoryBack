@@ -1,0 +1,14 @@
+Django==5.2.11
+django-phonenumber-field==8.4.0
+phonenumbers==8.13.46
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.5.1
+drf-yasg==1.21.14
+python-decouple==3.8
+django-cors-headers==4.4.0
+django-filter==24.3
+django-extensions==3.2.3
+psycopg2-binary==2.9.10
+Pillow==11.0.0
+gunicorn==25.1.0
+whitenoise==6.12.0
