@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from apps.products.models import Product, Category
 from decimal import Decimal
-
+import uuid
 
 class CategorySerializer(serializers.ModelSerializer):
     """
@@ -108,11 +108,15 @@ class ProductSerializer(serializers.ModelSerializer):
             )
         return value
 
-
 class ProductCreateSerializer(serializers.ModelSerializer):
-    """
-    Serializer pour la création de produits
-    """
+    # ← déclarer explicitement sku comme non requis
+    sku = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        default=""
+    )
+
     class Meta:
         model = Product
         fields = [
@@ -122,38 +126,35 @@ class ProductCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_sku(self, value):
-        value = value.strip().upper()
-        if not value:
-            raise serializers.ValidationError("Le code SKU est obligatoire.")
-        return value
-
-    def validate(self, attrs):
-        # Validation du prix
-        if attrs['selling_price'] < attrs['cost_price']:
-            raise serializers.ValidationError({
-                'selling_price': 'Le prix de vente ne peut pas être inférieur au prix d\'achat.'
-            })
-
-        # Validation des seuils
-        if attrs['minimum_stock'] > attrs['reorder_level']:
-            raise serializers.ValidationError({
-                'minimum_stock': 'Le stock minimum doit être inférieur ou égal au niveau de réapprovisionnement.'
-            })
-
-        return attrs
+        if value:
+            return value.strip().upper()
+        return ""  # sera généré dans create()
 
     def create(self, validated_data):
-        # Ajouter l'utilisateur qui crée le produit
         request = self.context.get('request')
+
+        # Auto-génération du SKU
+        sku = (validated_data.get('sku') or '').strip()
+        if not sku:
+            name = validated_data.get('name', '')
+            prefix = ''.join(
+                word[0].upper()
+                for word in name.split()[:3]
+                if word
+            ) or 'PRD'
+            unique_id = uuid.uuid4().hex[:6].upper()
+            sku = f"{prefix}-{unique_id}"
+            while Product.objects.filter(sku=sku).exists():
+                sku = f"{prefix}-{uuid.uuid4().hex[:6].upper()}"
+
+        validated_data['sku'] = sku
+
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
-
-            # Si l'utilisateur a une boutique et shop n'est pas fourni
             if not validated_data.get('shop') and request.user.shop:
                 validated_data['shop'] = request.user.shop
 
         return Product.objects.create(**validated_data)
-
 
 class ProductUpdateSerializer(serializers.ModelSerializer):
     """
