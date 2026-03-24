@@ -18,6 +18,7 @@ class User(AbstractUser):
         ('SUPER_ADMIN', 'Super Administrateur'),
         ('SHOP_MANAGER', 'Manager de Boutique'),
         ('EMPLOYEE', 'Employé'),
+        ('LIVREUR',      'Livreur'),
     ]
 
     # Champs de base

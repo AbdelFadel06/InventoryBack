@@ -26,6 +26,8 @@ urlpatterns = [
     path('api/', include('apps.products.urls')),
     path('api/', include('apps.stocks.urls')),
     path('api/', include('apps.inventories.urls')),
+    path('api/', include('apps.sales.urls')),
+
 
     # JWT endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
