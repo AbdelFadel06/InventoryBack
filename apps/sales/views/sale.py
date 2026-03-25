@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Sum, Count
+from django.db.models.functions import TruncDate
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import date
@@ -283,6 +284,49 @@ class SaleViewSet(viewsets.ModelViewSet):
             'products_recap': list(items_qs),
             'by_livreur':     by_livreur,
             'expenses':       expenses_list,
+        })
+
+    @action(detail=False, methods=['get'])
+    def monthly_summary(self, request):
+        """
+        Résumé journalier d'un mois — pour l'historique des ventes
+        GET /api/sales/monthly_summary/?year=2026&month=3
+        """
+        try:
+            year  = int(request.query_params.get('year',  timezone.now().year))
+            month = int(request.query_params.get('month', timezone.now().month))
+        except ValueError:
+            return Response({'error': 'Paramètres invalides.'}, status=400)
+
+        user = request.user
+        qs = Sale.objects.filter(
+            status='completed',
+            created_at__year=year,
+            created_at__month=month,
+        )
+        if not user.is_super_admin:
+            if not user.shop:
+                return Response({'error': 'Boutique non assignée.'}, status=400)
+            qs = qs.filter(shop=user.shop)
+
+        daily = (
+            qs.annotate(day=TruncDate('created_at'))
+              .values('day')
+              .annotate(total_sales=Count('id'), total_amount=Sum('total_amount'))
+              .order_by('day')
+        )
+
+        return Response({
+            'year':  year,
+            'month': month,
+            'days':  [
+                {
+                    'date':         str(d['day']),
+                    'total_sales':  d['total_sales'],
+                    'total_amount': float(d['total_amount'] or 0),
+                }
+                for d in daily
+            ],
         })
 
     @action(detail=False, methods=['get'])

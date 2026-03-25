@@ -70,12 +70,12 @@ class UserViewSet(viewsets.ModelViewSet):
         """
         user = self.request.user
 
-        # Shop Manager ne peut créer que des employés de sa boutique
+        # Shop Manager peut créer des employés et des livreurs pour sa boutique
         if user.is_shop_manager:
-            serializer.save(
-                role='EMPLOYEE',
-                shop=user.shop
-            )
+            role = serializer.validated_data.get('role', 'EMPLOYEE')
+            if role not in ('EMPLOYEE', 'LIVREUR'):
+                role = 'EMPLOYEE'
+            serializer.save(role=role, shop=user.shop)
         else:
             serializer.save()
 
@@ -145,7 +145,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserListSerializer(queryset, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsShopManagerOrSuperAdmin])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def livreurs(self, request):
         """
         Liste des livreurs uniquement
