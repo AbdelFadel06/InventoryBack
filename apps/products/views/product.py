@@ -5,10 +5,11 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Sum, Count, F, DecimalField
 from django_filters.rest_framework import DjangoFilterBackend
 
-from apps.products.models import Product, Category
+from apps.products.models import Product, Category, ProductImage
 from apps.products.serializers import (
     CategorySerializer,
     ProductSerializer,
+    ProductImageSerializer,
     ProductCreateSerializer,
     ProductUpdateSerializer,
     ProductListSerializer,
@@ -336,3 +337,42 @@ class ProductViewSet(viewsets.ModelViewSet):
                 context={'request': request}
             ).data
         })
+
+    @action(detail=True, methods=['post'], url_path='add_image')
+    def add_image(self, request, pk=None):
+        """
+        Ajouter une image Cloudinary à un produit
+        POST /api/products/{id}/add_image/
+        Body: { "url": "https://res.cloudinary.com/...", "is_primary": false }
+        """
+        product = self.get_object()
+        url = request.data.get('url')
+        if not url:
+            return Response({'error': 'URL requise.'}, status=status.HTTP_400_BAD_REQUEST)
+        is_primary = request.data.get('is_primary', not product.images.exists())
+        order = product.images.count()
+        image = ProductImage.objects.create(
+            product=product, url=url, is_primary=is_primary, order=order
+        )
+        return Response(ProductImageSerializer(image).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path=r'remove_image/(?P<image_id>[^/.]+)')
+    def remove_image(self, request, pk=None, image_id=None):
+        """
+        Supprimer une image d'un produit
+        DELETE /api/products/{id}/remove_image/{image_id}/
+        """
+        product = self.get_object()
+        try:
+            image = product.images.get(pk=image_id)
+        except ProductImage.DoesNotExist:
+            return Response({'error': 'Image introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        was_primary = image.is_primary
+        image.delete()
+        # Si c'était l'image principale, promouvoir la suivante
+        if was_primary:
+            next_img = product.images.first()
+            if next_img:
+                next_img.is_primary = True
+                next_img.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)

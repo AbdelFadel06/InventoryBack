@@ -96,14 +96,6 @@ class Product(models.Model):
         verbose_name="Catégorie"
     )
 
-    # Image
-    image = models.ImageField(
-        upload_to='product_images/',
-        blank=True,
-        null=True,
-        verbose_name="Image du produit"
-    )
-
     # Prix
     cost_price = models.DecimalField(
         max_digits=10,
@@ -249,3 +241,44 @@ class Product(models.Model):
         """Vérifie si le produit doit être réapprovisionné"""
         current_stock = self.get_current_stock(shop)
         return current_stock <= self.reorder_level
+
+
+class ProductImage(models.Model):
+    """
+    Image d'un produit (URL Cloudinary)
+    """
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='images',
+        verbose_name="Produit"
+    )
+    url = models.URLField(
+        max_length=500,
+        verbose_name="URL Cloudinary"
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        verbose_name="Image principale"
+    )
+    order = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name="Ordre d'affichage"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Image produit"
+        verbose_name_plural = "Images produit"
+        ordering = ['order', 'created_at']
+
+    def save(self, *args, **kwargs):
+        # S'il n'y a aucune image primaire, cette image le devient automatiquement
+        if self.is_primary:
+            ProductImage.objects.filter(product=self.product, is_primary=True).exclude(pk=self.pk).update(is_primary=False)
+        elif not ProductImage.objects.filter(product=self.product, is_primary=True).exclude(pk=self.pk).exists():
+            self.is_primary = True
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Image {self.order} — {self.product.name}"
