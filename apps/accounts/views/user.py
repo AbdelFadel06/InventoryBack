@@ -132,12 +132,27 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsShopManagerOrSuperAdmin])
     def employees(self, request):
         """
-        Liste des employés
+        Liste des employés et livreurs
         GET /api/users/employees/
         """
-        queryset = self.get_queryset().filter(role='EMPLOYEE')
+        queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'LIVREUR'])
 
         # Filtre optionnel par boutique (pour Super Admin)
+        shop_id = request.query_params.get('shop')
+        if shop_id and request.user.is_super_admin:
+            queryset = queryset.filter(shop_id=shop_id)
+
+        serializer = UserListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsShopManagerOrSuperAdmin])
+    def livreurs(self, request):
+        """
+        Liste des livreurs uniquement
+        GET /api/users/livreurs/
+        """
+        queryset = self.get_queryset().filter(role='LIVREUR', is_active=True)
+
         shop_id = request.query_params.get('shop')
         if shop_id and request.user.is_super_admin:
             queryset = queryset.filter(shop_id=shop_id)
