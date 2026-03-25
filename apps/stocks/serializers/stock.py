@@ -11,6 +11,7 @@ class StockSerializer(serializers.ModelSerializer):
     """
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_sku = serializers.CharField(source='product.sku', read_only=True)
+    product_image = serializers.SerializerMethodField()
     shop_name = serializers.CharField(source='shop.name', read_only=True)
     unit = serializers.CharField(source='product.unit', read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
@@ -25,10 +26,17 @@ class StockSerializer(serializers.ModelSerializer):
         allow_null=True
     )
 
+    def get_product_image(self, obj):
+        img = obj.product.images.filter(is_primary=True).first()
+        if img:
+            return img.url
+        img = obj.product.images.first()
+        return img.url if img else None
+
     class Meta:
         model = Stock
         fields = [
-            'id', 'product', 'product_name', 'product_sku',
+            'id', 'product', 'product_name', 'product_sku', 'product_image',
             'shop', 'shop_name', 'quantity', 'unit',
             'is_low_stock', 'needs_reorder', 'stock_status',
             'minimum_stock', 'reorder_level', 'stock_value',
@@ -43,15 +51,23 @@ class StockListSerializer(serializers.ModelSerializer):
     """
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_sku = serializers.CharField(source='product.sku', read_only=True)
+    product_image = serializers.SerializerMethodField()
     shop_name = serializers.CharField(source='shop.name', read_only=True)
     stock_status = serializers.CharField(read_only=True)
     stock_value = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
+    def get_product_image(self, obj):
+        img = obj.product.images.filter(is_primary=True).first()
+        if img:
+            return img.url
+        img = obj.product.images.first()
+        return img.url if img else None
+
     class Meta:
         model = Stock
         fields = [
-            'id', 'product', 'product_name', 'product_sku',
-            'shop', 'shop_name', 'quantity', 'stock_status','stock_value'
+            'id', 'product', 'product_name', 'product_sku', 'product_image',
+            'shop', 'shop_name', 'quantity', 'stock_status', 'stock_value'
         ]
 
 
