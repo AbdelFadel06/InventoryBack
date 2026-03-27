@@ -375,7 +375,7 @@ class SaleViewSet(viewsets.ModelViewSet):
             'pending_count':   pending.count(),
             'total_paid':      paid.aggregate(t=Sum('total_amount'))['t'] or 0,
             'total_pending':   pending.aggregate(t=Sum('total_amount'))['t'] or 0,
-            'deliveries':      SaleListSerializer(qs.prefetch_related('items__product'), many=True).data,
+            'deliveries':      SaleSerializer(qs.prefetch_related('items__product'), many=True).data,
         })
 
 
