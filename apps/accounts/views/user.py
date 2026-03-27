@@ -148,14 +148,19 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def livreurs(self, request):
         """
-        Liste des livreurs uniquement
+        Liste des livreurs uniquement — accessible à tous les utilisateurs connectés
+        (les caissiers en ont besoin pour les livraisons en POS)
         GET /api/users/livreurs/
         """
-        queryset = self.get_queryset().filter(role='LIVREUR', is_active=True)
+        queryset = User.objects.filter(role='LIVREUR', is_active=True)
 
-        shop_id = request.query_params.get('shop')
-        if shop_id and request.user.is_super_admin:
-            queryset = queryset.filter(shop_id=shop_id)
+        if request.user.is_super_admin:
+            shop_id = request.query_params.get('shop')
+            if shop_id:
+                queryset = queryset.filter(shop_id=shop_id)
+        else:
+            # Filtre par boutique de l'utilisateur connecté
+            queryset = queryset.filter(shop=request.user.shop)
 
         serializer = UserListSerializer(queryset, many=True)
         return Response(serializer.data)
