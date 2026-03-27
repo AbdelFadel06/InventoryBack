@@ -45,11 +45,12 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def active(self, request):
-        """Session active de la boutique courante"""
+        """Session active — filtrée par caissier pour les employés, par shop pour managers/admins"""
         today = timezone.now().date()
-        shop  = request.user.shop
+        user  = request.user
+        shop  = user.shop
 
-        if not shop and not request.user.is_super_admin:
+        if not shop and not user.is_super_admin:
             return Response({'error': 'Boutique non assignée.'}, status=400)
 
         qs = CashierSession.objects.filter(
@@ -57,7 +58,14 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
             start_date__lte=today,
             end_date__gte=today,
         )
-        if not request.user.is_super_admin:
+
+        if user.is_super_admin:
+            pass  # voit toutes les sessions
+        elif getattr(user, 'role', None) == 'EMPLOYEE':
+            # Un caissier ne voit que SA session
+            qs = qs.filter(shop=shop, cashier=user)
+        else:
+            # Manager : toutes les sessions du shop
             qs = qs.filter(shop=shop)
 
         session = qs.first()
