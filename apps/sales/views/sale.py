@@ -114,17 +114,18 @@ class SaleViewSet(viewsets.ModelViewSet):
         else:
             return qs.none()
 
-        # Filtre par date
-        date_str = self.request.query_params.get('date')
-        if date_str:
-            try:
-                filter_date = date.fromisoformat(date_str)
-                qs = qs.filter(created_at__date=filter_date)
-            except ValueError:
-                pass
-        else:
-            today = timezone.now().date()
-            qs = qs.filter(created_at__date=today)
+        # Filtre par date — uniquement sur la liste, pas sur le détail/cancel/mark_delivered
+        if self.action == 'list':
+            date_str = self.request.query_params.get('date')
+            if date_str:
+                try:
+                    filter_date = date.fromisoformat(date_str)
+                    qs = qs.filter(created_at__date=filter_date)
+                except ValueError:
+                    pass
+            else:
+                today = timezone.now().date()
+                qs = qs.filter(created_at__date=today)
 
         return qs
 
