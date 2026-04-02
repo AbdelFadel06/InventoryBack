@@ -14,10 +14,11 @@ class User(AbstractUser):
     ]
 
     ROLE_CHOICES = [
-        ('SUPER_ADMIN', 'Super Administrateur'),
+        ('SUPER_ADMIN',  'Super Administrateur'),
         ('SHOP_MANAGER', 'Manager de Boutique'),
-        ('EMPLOYEE', 'Employé'),
+        ('EMPLOYEE',     'Employé'),
         ('LIVREUR',      'Livreur'),
+        ('MAGASINIER',   'Magasinier'),
     ]
 
     # Champs de base
@@ -107,6 +108,10 @@ class User(AbstractUser):
     @property
     def is_employee(self):
         return self.role == 'EMPLOYEE'
+
+    @property
+    def is_magasinier(self):
+        return self.role == 'MAGASINIER'
 
     # apps/accounts/models.py
 

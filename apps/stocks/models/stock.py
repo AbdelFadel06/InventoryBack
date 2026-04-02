@@ -3,9 +3,15 @@ from django.core.validators import MinValueValidator
 from decimal import Decimal
 
 
+LOCATION_CHOICES = [
+    ('BOUTIQUE', 'Boutique'),
+    ('MAGASIN',  'Magasin'),
+]
+
+
 class Stock(models.Model):
     """
-    Stock actuel d'un produit dans une boutique
+    Stock actuel d'un produit dans une boutique ou son magasin
     """
     product = models.ForeignKey(
         'products.Product',
@@ -19,6 +25,13 @@ class Stock(models.Model):
         on_delete=models.CASCADE,
         related_name='stocks',
         verbose_name="Boutique"
+    )
+
+    location = models.CharField(
+        max_length=10,
+        choices=LOCATION_CHOICES,
+        default='BOUTIQUE',
+        verbose_name="Emplacement"
     )
 
     quantity = models.IntegerField(
@@ -45,31 +58,27 @@ class Stock(models.Model):
     class Meta:
         verbose_name = "Stock"
         verbose_name_plural = "Stocks"
-        ordering = ['shop', 'product']
-        # Un produit ne peut avoir qu'un seul stock par boutique
-        unique_together = [['product', 'shop']]
+        ordering = ['shop', 'product', 'location']
+        unique_together = [['product', 'shop', 'location']]
         indexes = [
-            models.Index(fields=['product', 'shop']),
+            models.Index(fields=['product', 'shop', 'location']),
             models.Index(fields=['shop']),
             models.Index(fields=['quantity']),
         ]
 
     def __str__(self):
-        return f"{self.product.name} - {self.shop.name}: {self.quantity} {self.product.unit}"
+        return f"{self.product.name} - {self.shop.name} [{self.get_location_display()}]: {self.quantity} {self.product.unit}"
 
     @property
     def is_low_stock(self):
-        """Vérifie si le stock est bas"""
         return self.quantity < self.product.minimum_stock
 
     @property
     def needs_reorder(self):
-        """Vérifie si le produit doit être réapprovisionné"""
         return self.quantity <= self.product.reorder_level
 
     @property
     def stock_status(self):
-        """Retourne le statut du stock"""
         if self.quantity == 0:
             return 'out_of_stock'
         elif self.quantity < self.product.minimum_stock:
@@ -80,7 +89,6 @@ class Stock(models.Model):
 
     @property
     def stock_value(self):
-        """Calcule la valeur du stock (quantité × prix d'achat)"""
         return self.quantity * self.product.cost_price
 
 
@@ -100,7 +108,6 @@ class StockMovement(models.Model):
         ('inventory', 'Ajustement inventaire'),
     ]
 
-    # Référence
     product = models.ForeignKey(
         'products.Product',
         on_delete=models.CASCADE,
@@ -115,7 +122,13 @@ class StockMovement(models.Model):
         verbose_name="Boutique"
     )
 
-    # Type et quantité
+    location = models.CharField(
+        max_length=10,
+        choices=LOCATION_CHOICES,
+        default='BOUTIQUE',
+        verbose_name="Emplacement"
+    )
+
     movement_type = models.CharField(
         max_length=20,
         choices=MOVEMENT_TYPES,
@@ -137,7 +150,6 @@ class StockMovement(models.Model):
         help_text="Stock après ce mouvement"
     )
 
-    # Transfert (si applicable)
     related_shop = models.ForeignKey(
         'shops.Shop',
         on_delete=models.SET_NULL,
@@ -148,20 +160,17 @@ class StockMovement(models.Model):
         help_text="Pour les transferts: boutique source ou destination"
     )
 
-    # Informations supplémentaires
     reference = models.CharField(
         max_length=100,
         blank=True,
         null=True,
         verbose_name="Référence",
-        help_text="Numéro de commande, bon de livraison, etc."
     )
 
     reason = models.TextField(
         blank=True,
         null=True,
         verbose_name="Motif",
-        help_text="Raison du mouvement"
     )
 
     notes = models.TextField(
@@ -170,17 +179,14 @@ class StockMovement(models.Model):
         verbose_name="Notes"
     )
 
-    # Prix unitaire au moment du mouvement
     unit_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         null=True,
         blank=True,
         verbose_name="Prix unitaire",
-        help_text="Prix d'achat ou de vente au moment du mouvement"
     )
 
-    # Métadonnées
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Date du mouvement"
@@ -212,44 +218,33 @@ class StockMovement(models.Model):
 
     @property
     def total_value(self):
-        """Calcule la valeur totale du mouvement"""
         if self.unit_price:
             return abs(self.quantity) * self.unit_price
         return abs(self.quantity) * self.product.cost_price
 
     def save(self, *args, **kwargs):
-        """
-        Enregistrer le mouvement et mettre à jour le stock
-        """
-        # Si c'est une nouvelle création (pas une mise à jour)
         if not self.pk:
-            # Récupérer ou créer le stock
             stock, created = Stock.objects.get_or_create(
                 product=self.product,
                 shop=self.shop,
+                location=self.location,
                 defaults={'quantity': 0}
             )
 
-            # Enregistrer la quantité avant
             self.quantity_before = stock.quantity
-
-            # Calculer la nouvelle quantité
             new_quantity = stock.quantity + self.quantity
 
-            # Vérifier que la quantité ne devient pas négative
             if new_quantity < 0:
                 from django.core.exceptions import ValidationError
                 raise ValidationError(
-                    f"Stock insuffisant. Stock actuel: {stock.quantity}, "
+                    f"Stock insuffisant. Stock actuel ({self.get_location_display()}): {stock.quantity}, "
                     f"tentative de retrait: {abs(self.quantity)}"
                 )
 
-            # Mettre à jour le stock
             stock.quantity = new_quantity
             stock.updated_by = self.created_by
             stock.save()
 
-            # Enregistrer la quantité après
             self.quantity_after = new_quantity
 
         super().save(*args, **kwargs)
@@ -257,24 +252,34 @@ class StockMovement(models.Model):
 
 class StockTransfer(models.Model):
     """
-    Transfert de stock entre boutiques
+    Transfert de stock entre boutiques ou du magasin vers la boutique
     """
 
     STATUS_CHOICES = [
-        ('pending', 'En attente'),
+        ('pending',    'En attente'),
         ('in_transit', 'En transit'),
-        ('received', 'Reçu'),
-        ('cancelled', 'Annulé'),
+        ('received',   'Reçu'),
+        ('cancelled',  'Annulé'),
     ]
 
-    # Référence
+    TRANSFER_TYPE_CHOICES = [
+        ('inter_shop', 'Inter-boutique'),
+        ('warehouse',  'Magasin → Boutique'),
+    ]
+
     reference = models.CharField(
         max_length=100,
         unique=True,
         verbose_name="Numéro de transfert"
     )
 
-    # Boutiques
+    transfer_type = models.CharField(
+        max_length=20,
+        choices=TRANSFER_TYPE_CHOICES,
+        default='inter_shop',
+        verbose_name="Type de transfert"
+    )
+
     from_shop = models.ForeignKey(
         'shops.Shop',
         on_delete=models.CASCADE,
@@ -289,7 +294,6 @@ class StockTransfer(models.Model):
         verbose_name="Boutique destination"
     )
 
-    # Produit et quantité
     product = models.ForeignKey(
         'products.Product',
         on_delete=models.CASCADE,
@@ -301,7 +305,6 @@ class StockTransfer(models.Model):
         verbose_name="Quantité"
     )
 
-    # Statut
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -309,14 +312,12 @@ class StockTransfer(models.Model):
         verbose_name="Statut"
     )
 
-    # Notes
     notes = models.TextField(
         blank=True,
         null=True,
         verbose_name="Notes"
     )
 
-    # Métadonnées
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Date de création"
@@ -359,8 +360,11 @@ class StockTransfer(models.Model):
             models.Index(fields=['reference']),
             models.Index(fields=['from_shop', 'to_shop']),
             models.Index(fields=['status']),
+            models.Index(fields=['transfer_type']),
             models.Index(fields=['-created_at']),
         ]
 
     def __str__(self):
+        if self.transfer_type == 'warehouse':
+            return f"{self.reference} - {self.product.name}: Magasin → Boutique ({self.from_shop.name})"
         return f"{self.reference} - {self.product.name}: {self.from_shop.name} → {self.to_shop.name}"
