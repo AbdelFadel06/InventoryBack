@@ -73,7 +73,7 @@ class UserViewSet(viewsets.ModelViewSet):
         # Shop Manager peut créer des employés et des livreurs pour sa boutique
         if user.is_shop_manager:
             role = serializer.validated_data.get('role', 'EMPLOYEE')
-            if role not in ('EMPLOYEE', 'LIVREUR'):
+            if role not in ('EMPLOYEE', 'LIVREUR', 'MAGASINIER'):
                 role = 'EMPLOYEE'
             serializer.save(role=role, shop=user.shop)
         else:
@@ -135,7 +135,7 @@ class UserViewSet(viewsets.ModelViewSet):
         Liste des employés et livreurs
         GET /api/users/employees/
         """
-        queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'LIVREUR'])
+        queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'LIVREUR', 'MAGASINIER'])
 
         # Filtre optionnel par boutique (pour Super Admin)
         shop_id = request.query_params.get('shop')
