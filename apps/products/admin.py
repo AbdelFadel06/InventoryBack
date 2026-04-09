@@ -36,8 +36,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'category', 'shop', 'unit', 'created_at']
     search_fields = ['name', 'sku', 'barcode', 'description']
     readonly_fields = [
-        'created_at', 'updated_at', 'profit_margin',
-        'profit_amount', 'created_by'
+        'created_at', 'updated_at', 'created_by'
     ]
 
     fieldsets = (
@@ -45,7 +44,7 @@ class ProductAdmin(admin.ModelAdmin):
             'fields': ('name', 'description', 'sku', 'barcode', 'category', 'image')
         }),
         ('Prix', {
-            'fields': ('cost_price', 'selling_price', 'profit_margin', 'profit_amount', 'unit')
+            'fields': ('selling_price', 'unit')
         }),
         ('Gestion du stock', {
             'fields': ('minimum_stock', 'reorder_level')

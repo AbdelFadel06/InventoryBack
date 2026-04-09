@@ -157,7 +157,7 @@ class Inventory(models.Model):
         total = 0
         for line in self.lines.all():
             if line.difference != 0:
-                total += abs(line.difference) * line.product.cost_price
+                total += abs(line.difference) * line.product.selling_price
         return total
 
     def can_be_validated(self):
@@ -294,7 +294,7 @@ class InventoryLine(models.Model):
     @property
     def adjustment_value(self):
         """Valeur de l'ajustement nécessaire"""
-        return abs(self.difference) * self.product.cost_price
+        return abs(self.difference) * self.product.selling_price
 
     def save(self, *args, **kwargs):
         """

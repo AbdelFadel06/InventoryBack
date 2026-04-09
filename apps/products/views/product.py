@@ -271,8 +271,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         updated_count = 0
 
         for product in products:
-            # Augmenter les prix
-            product.cost_price = product.cost_price * (1 + percentage / 100)
             product.selling_price = product.selling_price * (1 + percentage / 100)
             product.save()
             updated_count += 1

@@ -220,36 +220,37 @@ class SaleViewSet(viewsets.ModelViewSet):
             total_discount=Sum('total_discount'),
         )
 
-        # ── Par moyen de paiement (ventes directes payées) ──────────
-        cash_total  = qs.filter(payment_method='cash', payment_status='paid').aggregate(
-            t=Sum('total_amount'))['t'] or 0
-        momo_total  = qs.filter(payment_method='mobile_money', payment_status='paid').aggregate(
-            t=Sum('total_amount'))['t'] or 0
+        # ── Par moyen de paiement (toutes ventes payées confondues) ───
+        # Espèces : cash direct + livraisons encaissées à la livraison
+        cash_total = qs.filter(
+            payment_method__in=['cash', 'on_delivery'], payment_status='paid'
+        ).aggregate(t=Sum('total_amount'))['t'] or 0
+
+        # Mobile Money : momo direct + livraisons prépayées par momo
+        momo_total = qs.filter(
+            payment_method='mobile_money', payment_status='paid'
+        ).aggregate(t=Sum('total_amount'))['t'] or 0
 
         # ── Livraisons ──────────────────────────────────────────────
         deliveries_qs = qs.filter(sale_type='delivery')
 
-        # Par livreur
+        # Par livreur — uniquement les livraisons non payées
         by_livreur = []
-        livreurs = deliveries_qs.values(
+        pending_qs = deliveries_qs.filter(payment_status='pending')
+        livreurs = pending_qs.values(
             'livreur__id', 'livreur__first_name', 'livreur__last_name'
         ).annotate(
-            total=Sum('total_amount'),
-            paid=Sum('total_amount', filter=Q(payment_status='paid')),
-            pending=Sum('total_amount', filter=Q(payment_status='pending')),
-            count=Count('id'),
+            pending_amount=Sum('total_amount'),
+            pending_count=Count('id'),
         )
         for l in livreurs:
             by_livreur.append({
-                'livreur_id':   l['livreur__id'],
-                'livreur_name': f"{l['livreur__first_name']} {l['livreur__last_name']}",
-                'total':        l['total'] or 0,
-                'paid':         l['paid']  or 0,
-                'pending':      l['pending'] or 0,
-                'count':        l['count'],
+                'livreur_id':     l['livreur__id'],
+                'livreur_name':   f"{l['livreur__first_name']} {l['livreur__last_name']}",
+                'pending_amount': l['pending_amount'] or 0,
+                'pending_count':  l['pending_count'],
             })
 
-        deliveries_paid    = deliveries_qs.filter(payment_status='paid').aggregate(t=Sum('total_amount'))['t'] or 0
         deliveries_pending = deliveries_qs.filter(payment_status='pending').aggregate(t=Sum('total_amount'))['t'] or 0
 
         # ── Récap articles vendus ───────────────────────────────────
@@ -273,7 +274,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         expenses_list  = ExpenseSerializer(expenses_qs, many=True).data
 
         # ── Total net ───────────────────────────────────────────────
-        total_collected = (cash_total or 0) + (momo_total or 0) + (deliveries_paid or 0)
+        total_collected = cash_total + momo_total
         net_total       = total_collected - total_expenses
 
         return Response({
@@ -282,10 +283,9 @@ class SaleViewSet(viewsets.ModelViewSet):
                 'total_sales':          totals['total_sales']   or 0,
                 'total_amount':         totals['total_amount']  or 0,
                 'total_discount':       totals['total_discount'] or 0,
-                'cash_total':           cash_total,
-                'momo_total':           momo_total,
-                'deliveries_paid':      deliveries_paid,
-                'deliveries_pending':   deliveries_pending,
+                'cash_total':          cash_total,
+                'momo_total':          momo_total,
+                'deliveries_pending':  deliveries_pending,
                 'total_expenses':       total_expenses,
                 'total_collected':      total_collected,
                 'net_total':            net_total,

@@ -97,14 +97,6 @@ class Product(models.Model):
     )
 
     # Prix
-    cost_price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.00'))],
-        verbose_name="Prix d'achat",
-        help_text="Prix d'achat du produit"
-    )
-
     selling_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -200,19 +192,6 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.sku})"
-
-    @property
-    def profit_margin(self):
-        """Calcule la marge bénéficiaire en pourcentage"""
-        if self.cost_price > 0:
-            margin = ((self.selling_price - self.cost_price) / self.cost_price) * 100
-            return round(margin, 2)
-        return 0
-
-    @property
-    def profit_amount(self):
-        """Calcule le bénéfice par unité"""
-        return self.selling_price - self.cost_price
 
     def get_current_stock(self, shop=None):
         """

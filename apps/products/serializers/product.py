@@ -34,8 +34,6 @@ class ProductSerializer(serializers.ModelSerializer):
     """
     category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
     shop_name = serializers.CharField(source='shop.name', read_only=True, allow_null=True)
-    profit_margin = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
-    profit_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     created_by_name = serializers.CharField(
         source='created_by.get_full_name',
         read_only=True,
@@ -51,7 +49,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'sku', 'barcode',
             'category', 'category_name',
             'images', 'primary_image',
-            'cost_price', 'selling_price', 'profit_margin', 'profit_amount',
+            'selling_price',
             'unit', 'minimum_stock', 'reorder_level',
             'shop', 'shop_name', 'is_active',
             'current_stock', 'created_at', 'updated_at',
@@ -83,12 +81,6 @@ class ProductSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        cost_price = attrs.get('cost_price', getattr(self.instance, 'cost_price', None))
-        selling_price = attrs.get('selling_price', getattr(self.instance, 'selling_price', None))
-        if cost_price and selling_price and selling_price < cost_price:
-            raise serializers.ValidationError({
-                'selling_price': "Le prix de vente ne peut pas être inférieur au prix d'achat."
-            })
         minimum_stock = attrs.get('minimum_stock', getattr(self.instance, 'minimum_stock', None))
         reorder_level = attrs.get('reorder_level', getattr(self.instance, 'reorder_level', None))
         if minimum_stock and reorder_level and minimum_stock > reorder_level:
@@ -108,7 +100,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'name', 'description', 'sku', 'barcode',
-            'category', 'cost_price', 'selling_price',
+            'category', 'selling_price',
             'unit', 'minimum_stock', 'reorder_level', 'shop',
             'image_urls',
         ]
@@ -150,20 +142,11 @@ class ProductUpdateSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'name', 'description', 'barcode', 'category',
-            'cost_price', 'selling_price', 'unit',
+            'selling_price', 'unit',
             'minimum_stock', 'reorder_level', 'is_active'
         ]
 
     def validate(self, attrs):
-        # Validation du prix
-        cost_price = attrs.get('cost_price', self.instance.cost_price)
-        selling_price = attrs.get('selling_price', self.instance.selling_price)
-
-        if selling_price < cost_price:
-            raise serializers.ValidationError({
-                'selling_price': 'Le prix de vente ne peut pas être inférieur au prix d\'achat.'
-            })
-
         # Validation des seuils
         minimum_stock = attrs.get('minimum_stock', self.instance.minimum_stock)
         reorder_level = attrs.get('reorder_level', self.instance.reorder_level)
@@ -191,7 +174,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'sku', 'barcode',
             'primary_image',
-            'category', 'category_name', 'cost_price', 'selling_price',
+            'category', 'category_name', 'selling_price',
             'unit', 'shop', 'shop_name', 'is_active',
             'current_stock', 'is_low_stock'
         ]

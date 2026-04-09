@@ -89,7 +89,7 @@ class Stock(models.Model):
 
     @property
     def stock_value(self):
-        return self.quantity * self.product.cost_price
+        return self.quantity * self.product.selling_price
 
 
 class StockMovement(models.Model):
@@ -220,7 +220,7 @@ class StockMovement(models.Model):
     def total_value(self):
         if self.unit_price:
             return abs(self.quantity) * self.unit_price
-        return abs(self.quantity) * self.product.cost_price
+        return abs(self.quantity) * self.product.selling_price
 
     def save(self, *args, **kwargs):
         if not self.pk:
