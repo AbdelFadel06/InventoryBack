@@ -125,9 +125,3 @@ class User(AbstractUser):
             self.shop = None
 
         super().save(*args, **kwargs)
-
-        # Synchroniser shop.manager si c'est un SHOP_MANAGER
-        if self.role == 'SHOP_MANAGER' and self.shop:
-            if self.shop.manager != self:
-                self.shop.manager = self
-                self.shop.save(update_fields=['manager'])

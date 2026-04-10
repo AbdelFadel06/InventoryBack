@@ -73,15 +73,13 @@ class Shop(models.Model):
         verbose_name="Pays"
     )
 
-    # Manager principal
-    manager = models.OneToOneField(
+    # Managers (plusieurs managers possibles)
+    managers = models.ManyToManyField(
         'accounts.User',
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
-        related_name='managed_shop',
+        related_name='managed_shops',
         limit_choices_to={'role': 'SHOP_MANAGER'},
-        verbose_name="Manager principal"
+        verbose_name="Managers"
     )
 
     # Statut
@@ -116,7 +114,6 @@ class Shop(models.Model):
         indexes = [
             models.Index(fields=['name']),
             models.Index(fields=['is_active']),
-            models.Index(fields=['manager']),
         ]
 
     def __str__(self):
