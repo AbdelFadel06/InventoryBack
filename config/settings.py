@@ -97,36 +97,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DB_LIVE = config('DB_LIVE')
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if DB_LIVE in ['False', False]:
-
-
-  DATABASES = {
-      'default': {
-          'ENGINE': 'django.db.backends.postgresql',
-          'NAME': config('DB_NAME'),
-          'USER': config('DB_USER'),
-          'PASSWORD': config('DB_PASSWORD'),
-          'HOST': config('DB_HOST', default='localhost'),
-          'PORT': config('DB_PORT', default='5432'),
-      }
-  }
-
-else:
-  DATABASES = {
-      'default': {
-          'ENGINE': 'django.db.backends.postgresql',
-          'NAME': config('DBL_NAME'),
-          'USER': config('DBL_USER'),
-          'PASSWORD': config('DBL_PASSWORD'),
-          'HOST': config('DBL_HOST'),
-          'PORT': config('DBL_PORT'),
-      }
-  }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
+    }
+}
 
 
 
