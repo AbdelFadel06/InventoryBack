@@ -156,7 +156,14 @@ class ShopViewSet(viewsets.ModelViewSet):
         note = serializer.validated_data.get('note', '')
 
         from apps.accounts.models import User
-        users = User.objects.filter(id__in=user_ids)
+
+        # Le manager ne peut affecter que des employés dont il gère la home_shop
+        if request.user.is_shop_manager:
+            managed_shop_ids = request.user.managed_shops.values_list('id', flat=True)
+            users = User.objects.filter(id__in=user_ids, home_shop_id__in=managed_shop_ids)
+        else:
+            users = User.objects.filter(id__in=user_ids)
+
         assigned = []
 
         for user in users:

@@ -69,7 +69,16 @@ class User(AbstractUser):
         null=True,
         blank=True,
         related_name='users',
-        verbose_name="Boutique"
+        verbose_name="Boutique courante"
+    )
+
+    home_shop = models.ForeignKey(
+        'shops.Shop',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='home_users',
+        verbose_name="Boutique de rattachement"
     )
 
     # Métadonnées
@@ -89,6 +98,7 @@ class User(AbstractUser):
             models.Index(fields=['email']),
             models.Index(fields=['role']),
             models.Index(fields=['shop']),
+            models.Index(fields=['home_shop']),
         ]
 
     def __str__(self):
@@ -116,12 +126,15 @@ class User(AbstractUser):
     # apps/accounts/models.py
 
     def save(self, *args, **kwargs):
-        # Auto-generate username from email if not provided
         if not self.username:
             self.username = self.email.split('@')[0]
 
-        # SUPER_ADMIN ne doit pas être lié à une boutique
         if self.role == 'SUPER_ADMIN':
             self.shop = None
+            self.home_shop = None
+
+        # home_shop suit shop à la création si non défini explicitement
+        if self.shop and not self.home_shop:
+            self.home_shop = self.shop
 
         super().save(*args, **kwargs)

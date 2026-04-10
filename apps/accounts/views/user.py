@@ -53,29 +53,26 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = super().get_queryset()
 
-        # Super Admin voit tous les utilisateurs
         if user.is_super_admin:
             return queryset
 
-        # Shop Manager voit que les utilisateurs de sa boutique
+        # Manager voit les employés dont home_shop est dans ses boutiques gérées
         if user.is_shop_manager:
-            return queryset.filter(shop=user.shop)
+            managed_shop_ids = user.managed_shops.values_list('id', flat=True)
+            return queryset.filter(home_shop_id__in=managed_shop_ids)
 
-        # Employee voit que son propre profil
         return queryset.filter(id=user.id)
 
     def perform_create(self, serializer):
-        """
-        Création d'utilisateur avec logique métier
-        """
         user = self.request.user
 
-        # Shop Manager peut créer des employés et des livreurs pour sa boutique
         if user.is_shop_manager:
             role = serializer.validated_data.get('role', 'EMPLOYEE')
             if role not in ('EMPLOYEE', 'LIVREUR', 'MAGASINIER'):
                 role = 'EMPLOYEE'
-            serializer.save(role=role, shop=user.shop)
+            # home_shop = boutique principale du manager (première boutique gérée)
+            home_shop = user.managed_shops.first()
+            serializer.save(role=role, shop=home_shop, home_shop=home_shop)
         else:
             serializer.save()
 
