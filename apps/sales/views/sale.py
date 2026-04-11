@@ -15,6 +15,7 @@ from apps.sales.serializers.sale import (
     SaleSerializer, SaleListSerializer, SaleCreateSerializer,
     ExpenseSerializer,
 )
+from apps.shops.mixins import ActiveShopMixin
 
 
 class CashierSessionViewSet(viewsets.ModelViewSet):
@@ -86,7 +87,7 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
         return Response(CashierSessionSerializer(session).data)
 
 
-class SaleViewSet(viewsets.ModelViewSet):
+class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     queryset = Sale.objects.select_related(
         'shop', 'cashier', 'livreur', 'session'
     ).prefetch_related('items__product').all()
@@ -113,14 +114,14 @@ class SaleViewSet(viewsets.ModelViewSet):
             shop_id = self.request.query_params.get('shop')
             if shop_id:
                 qs = qs.filter(shop_id=shop_id)
-        elif user.shop:
-            qs = qs.filter(shop=user.shop)
-            # Caissier voit toutes les ventes de sa session
-            # Livreur voit ses livraisons
+        else:
+            active_shop = self.get_active_shop(self.request)
+            if not active_shop:
+                return qs.none()
+            qs = qs.filter(shop=active_shop)
+            # Livreur voit uniquement ses propres livraisons
             if hasattr(user, 'role') and user.role == 'LIVREUR':
                 qs = qs.filter(livreur=user)
-        else:
-            return qs.none()
 
         # Filtre par date — uniquement sur la liste, pas sur le détail/cancel/mark_delivered
         if self.action == 'list':
@@ -219,7 +220,9 @@ class SaleViewSet(viewsets.ModelViewSet):
             livreur_paid=False,
         )
         if not request.user.is_super_admin:
-            qs = qs.filter(shop=request.user.shop)
+            active_shop = self.get_active_shop(request)
+            if active_shop:
+                qs = qs.filter(shop=active_shop)
 
         count = qs.update(livreur_paid=True)
         return Response({'message': f'{count} commission(s) marquée(s) comme payée(s).', 'count': count})
@@ -237,10 +240,11 @@ class SaleViewSet(viewsets.ModelViewSet):
             shop_id = request.query_params.get('shop')
             if shop_id:
                 qs = qs.filter(shop_id=shop_id)
-        elif user.shop:
-            qs = qs.filter(shop=user.shop)
         else:
-            return Response([])
+            active_shop = self.get_active_shop(request)
+            if not active_shop:
+                return Response([])
+            qs = qs.filter(shop=active_shop)
 
         # Agréger par livreur
         stats = (
