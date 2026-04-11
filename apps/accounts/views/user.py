@@ -144,7 +144,7 @@ class UserViewSet(viewsets.ModelViewSet):
         Sans paramètre   → tout le pool (toutes boutiques gérées)
         """
         user = request.user
-        queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'LIVREUR', 'MAGASINIER'])
+        queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'MAGASINIER'])
 
         def _validate_shop_id(raw_id):
             """Retourne l'entier si le manager gère cette boutique, sinon None."""
@@ -178,19 +178,28 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def livreurs(self, request):
         """
-        Liste des livreurs uniquement — accessible à tous les utilisateurs connectés
-        (les caissiers en ont besoin pour les livraisons en POS)
+        Liste des livreurs — filtrés par home_shop du manager (ou shop actif).
+        Les livreurs peuvent travailler pour plusieurs boutiques mais sont
+        visibles uniquement aux managers de la boutique qui les a créés.
         GET /api/users/livreurs/
         """
+        user = request.user
         queryset = User.objects.filter(role='LIVREUR', is_active=True)
 
-        if request.user.is_super_admin:
+        if user.is_super_admin:
             shop_id = request.query_params.get('shop')
             if shop_id:
-                queryset = queryset.filter(shop_id=shop_id)
+                queryset = queryset.filter(home_shop_id=shop_id)
+        elif user.is_shop_manager:
+            # Livreurs dont home_shop est parmi les boutiques gérées
+            managed_shop_ids = user.managed_shops.values_list('id', flat=True)
+            queryset = queryset.filter(home_shop_id__in=managed_shop_ids)
         else:
-            # Filtre par boutique de l'utilisateur connecté
-            queryset = queryset.filter(shop=request.user.shop)
+            # Employé/caissier — livreurs de sa boutique courante
+            if user.shop:
+                queryset = queryset.filter(home_shop=user.shop)
+            else:
+                queryset = queryset.none()
 
         serializer = UserListSerializer(queryset, many=True)
         return Response(serializer.data)

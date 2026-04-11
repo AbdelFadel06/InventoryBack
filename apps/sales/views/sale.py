@@ -173,7 +173,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def mark_delivered(self, request, pk=None):
-        """Marquer une livraison comme livrée et payée"""
+        """Marquer une livraison comme livrée et payée (client a payé)"""
         sale = self.get_object()
         if sale.sale_type != 'delivery':
             return Response({'error': "Ce n'est pas une livraison."}, status=400)
@@ -185,6 +185,82 @@ class SaleViewSet(viewsets.ModelViewSet):
         sale.save(update_fields=['payment_status', 'delivered_at'])
 
         return Response(SaleSerializer(sale).data)
+
+    @action(detail=True, methods=['post'])
+    def mark_livreur_paid(self, request, pk=None):
+        """Marquer la commission livreur comme payée"""
+        sale = self.get_object()
+        if sale.sale_type != 'delivery':
+            return Response({'error': "Ce n'est pas une livraison."}, status=400)
+        if sale.livreur_paid:
+            return Response({'error': 'Commission déjà marquée comme payée.'}, status=400)
+
+        sale.livreur_paid = True
+        sale.save(update_fields=['livreur_paid'])
+        return Response({'message': 'Commission livreur marquée comme payée.', 'sale_id': sale.id})
+
+    @action(detail=False, methods=['post'])
+    def mark_livreur_paid_bulk(self, request):
+        """Marquer plusieurs commissions livreur comme payées en une fois.
+        Body: { "sale_ids": [1, 2, 3], "livreur_id": 5 }"""
+        sale_ids   = request.data.get('sale_ids', [])
+        livreur_id = request.data.get('livreur_id')
+        if not sale_ids or not livreur_id:
+            return Response({'error': 'sale_ids et livreur_id requis.'}, status=400)
+
+        qs = Sale.objects.filter(
+            id__in=sale_ids,
+            livreur_id=livreur_id,
+            sale_type='delivery',
+            livreur_paid=False,
+        )
+        if not request.user.is_super_admin:
+            qs = qs.filter(shop=request.user.shop)
+
+        count = qs.update(livreur_paid=True)
+        return Response({'message': f'{count} commission(s) marquée(s) comme payée(s).', 'count': count})
+
+    @action(detail=False, methods=['get'])
+    def livreur_stats(self, request):
+        """
+        Stats de tous les livreurs pour la boutique active.
+        GET /api/sales/livreur_stats/
+        """
+        user = request.user
+        qs = Sale.objects.filter(sale_type='delivery', status='completed')
+
+        if user.is_super_admin:
+            shop_id = request.query_params.get('shop')
+            if shop_id:
+                qs = qs.filter(shop_id=shop_id)
+        elif user.shop:
+            qs = qs.filter(shop=user.shop)
+        else:
+            return Response([])
+
+        # Agréger par livreur
+        stats = (
+            qs.values('livreur__id', 'livreur__first_name', 'livreur__last_name')
+            .annotate(
+                total_colis=Count('id'),
+                colis_payes=Count('id', filter=Q(livreur_paid=True)),
+                colis_non_payes=Count('id', filter=Q(livreur_paid=False)),
+                montant_total=Sum('total_amount'),
+            )
+            .order_by('livreur__last_name')
+        )
+
+        return Response([
+            {
+                'livreur_id':      s['livreur__id'],
+                'livreur_name':    f"{s['livreur__first_name']} {s['livreur__last_name']}",
+                'total_colis':     s['total_colis'],
+                'colis_payes':     s['colis_payes'],
+                'colis_non_payes': s['colis_non_payes'],
+                'montant_total':   float(s['montant_total'] or 0),
+            }
+            for s in stats
+        ])
 
     @action(detail=False, methods=['get'])
     def daily_report(self, request):
