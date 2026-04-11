@@ -195,6 +195,11 @@ CORS_ALLOWED_ORIGINS = config(
     default='http://localhost:5173,http://127.0.0.1:5173'
 ).split(',')
 
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-active-shop',
+]
+
 # HTTPS / security headers (production only)
 if not DEBUG:
     SECURE_SSL_REDIRECT = False  # nginx gère le SSL, pas Django
