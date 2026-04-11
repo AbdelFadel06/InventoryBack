@@ -17,6 +17,7 @@ from apps.accounts.permissions import (
     IsShopManagerOrSuperAdmin,
     CanManageUser
 )
+from apps.shops.models import Shop
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -70,8 +71,16 @@ class UserViewSet(viewsets.ModelViewSet):
             role = serializer.validated_data.get('role', 'EMPLOYEE')
             if role not in ('EMPLOYEE', 'LIVREUR', 'MAGASINIER'):
                 role = 'EMPLOYEE'
-            # home_shop = boutique principale du manager (première boutique gérée)
-            home_shop = user.managed_shops.first()
+            # Utilise la boutique active (X-Active-Shop header) si disponible
+            home_shop = None
+            active_shop_id = self.request.headers.get('X-Active-Shop')
+            if active_shop_id:
+                try:
+                    home_shop = user.managed_shops.get(id=int(active_shop_id))
+                except (ValueError, Shop.DoesNotExist):
+                    pass
+            if not home_shop:
+                home_shop = user.managed_shops.first()
             serializer.save(role=role, shop=home_shop, home_shop=home_shop)
         else:
             serializer.save()
@@ -129,15 +138,39 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsShopManagerOrSuperAdmin])
     def employees(self, request):
         """
-        Liste des employés et livreurs
-        GET /api/users/employees/
+        Liste des employés et livreurs.
+        ?shop=<id>       → filtre par boutique courante (user.shop, affectation active)
+        ?home_shop=<id>  → filtre par boutique d'appartenance permanente (user.home_shop)
+        Sans paramètre   → tout le pool (toutes boutiques gérées)
         """
+        user = request.user
         queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'LIVREUR', 'MAGASINIER'])
 
-        # Filtre optionnel par boutique (pour Super Admin)
-        shop_id = request.query_params.get('shop')
-        if shop_id and request.user.is_super_admin:
-            queryset = queryset.filter(shop_id=shop_id)
+        def _validate_shop_id(raw_id):
+            """Retourne l'entier si le manager gère cette boutique, sinon None."""
+            try:
+                sid = int(raw_id)
+            except (ValueError, TypeError):
+                return None
+            if user.is_super_admin:
+                return sid
+            if user.is_shop_manager and user.managed_shops.filter(id=sid).exists():
+                return sid
+            return None
+
+        # Filtre par affectation courante
+        shop_param = request.query_params.get('shop')
+        if shop_param:
+            sid = _validate_shop_id(shop_param)
+            if sid:
+                queryset = queryset.filter(shop_id=sid)
+
+        # Filtre par boutique d'appartenance permanente
+        home_shop_param = request.query_params.get('home_shop')
+        if home_shop_param:
+            sid = _validate_shop_id(home_shop_param)
+            if sid:
+                queryset = queryset.filter(home_shop_id=sid)
 
         serializer = UserListSerializer(queryset, many=True)
         return Response(serializer.data)
