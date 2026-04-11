@@ -17,6 +17,7 @@ from apps.products.serializers import (
 )
 from apps.products.permissions import CanManageProducts, CanManageCategories
 from apps.accounts.permissions import IsSuperAdmin
+from apps.shops.mixins import ActiveShopMixin
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -75,7 +76,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         })
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """
     ViewSet pour gérer les produits
 
@@ -113,12 +114,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         if user.is_super_admin:
             return queryset
 
-        # Shop Manager et Employee voient les produits de leur boutique
+        # Shop Manager et Employee voient les produits de la boutique active
         # + les produits communs (sans boutique assignée)
-        if user.shop:
-            return queryset.filter(Q(shop=user.shop) | Q(shop__isnull=True))
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return queryset.filter(Q(shop=active_shop) | Q(shop__isnull=True))
 
-        # Utilisateurs sans boutique voient que les produits communs
         return queryset.filter(shop__isnull=True)
 
     def perform_create(self, serializer):

@@ -24,9 +24,10 @@ from apps.stocks.permissions import (
     CanManageTransfers
 )
 from apps.accounts.permissions import IsSuperAdmin
+from apps.shops.mixins import ActiveShopMixin
 
 
-class StockViewSet(viewsets.ModelViewSet):
+class StockViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     queryset = Stock.objects.select_related('product', 'shop', 'updated_by').all()
     permission_classes = [IsAuthenticated, CanManageStock]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -47,8 +48,9 @@ class StockViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_super_admin:
             return queryset
-        if user.shop:
-            return queryset.filter(shop=user.shop)
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return queryset.filter(shop=active_shop)
         return queryset.none()
 
     @action(detail=False, methods=['get'])
@@ -117,7 +119,7 @@ class StockViewSet(viewsets.ModelViewSet):
         return Response(list(rows))
 
 
-class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
+class StockMovementViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
     queryset = StockMovement.objects.select_related('product', 'shop', 'related_shop', 'created_by').all()
     serializer_class = StockMovementSerializer
     permission_classes = [IsAuthenticated, CanCreateStockMovement]
@@ -134,8 +136,9 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         if user.is_super_admin:
             return queryset
-        if user.shop:
-            return queryset.filter(shop=user.shop)
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return queryset.filter(shop=active_shop)
         return queryset.none()
 
     @action(detail=False, methods=['post'])
