@@ -256,6 +256,9 @@ class SaleCreateSerializer(serializers.Serializer):
         sale_type      = validated_data.get('sale_type', 'direct')
         payment_method = validated_data.get('payment_method', 'cash')
         payment_status = 'pending' if payment_method == 'on_delivery' else 'paid'
+        # Livraisons cash/mobile_money : pas d'argent à récupérer → livreur déjà réglé
+        # Livraisons on_delivery : livreur collecte le cash chez le client → à régler manuellement
+        livreur_paid_default = (sale_type == 'delivery' and payment_method != 'on_delivery')
 
         sale = Sale.objects.create(
             session=session,
@@ -268,6 +271,7 @@ class SaleCreateSerializer(serializers.Serializer):
             delivery_address=validated_data.get('delivery_address', ''),
             client_phone=validated_data.get('client_phone', ''),
             notes=validated_data.get('notes', ''),
+            livreur_paid=livreur_paid_default,
         )
 
         subtotal = Decimal('0.00')
