@@ -69,11 +69,10 @@ class CategoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         category = self.get_object()
         products = category.products.filter(is_active=True)
 
-        # Filtrer selon l'utilisateur
-        user = request.user
-        if not user.is_super_admin:
-            if user.shop:
-                products = products.filter(Q(shop=user.shop) | Q(shop__isnull=True))
+        if not request.user.is_super_admin:
+            active_shop = self.get_active_shop(request)
+            if active_shop:
+                products = products.filter(Q(shop=active_shop) | Q(shop__isnull=True))
             else:
                 products = products.filter(shop__isnull=True)
 
@@ -147,7 +146,7 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         # Filtrer les produits avec stock bas
         low_stock_products = []
         for product in products:
-            shop = user.shop if user.shop else None
+            shop = self.get_active_shop(self.request)
             if product.is_low_stock(shop):
                 low_stock_products.append(product)
 
@@ -174,7 +173,7 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         # Filtrer les produits en rupture
         out_of_stock_products = []
         for product in products:
-            shop = user.shop if user.shop else None
+            shop = self.get_active_shop(self.request)
             if product.get_current_stock(shop) == 0:
                 out_of_stock_products.append(product)
 
@@ -201,7 +200,7 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         # Filtrer les produits à réapprovisionner
         reorder_products = []
         for product in products:
-            shop = user.shop if user.shop else None
+            shop = self.get_active_shop(self.request)
             if product.needs_reorder(shop):
                 reorder_products.append(product)
 
@@ -300,7 +299,7 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
 
         # Vérifier les permissions
         if not request.user.is_super_admin:
-            if product.shop and product.shop != request.user.shop:
+            if product.shop and product.shop != self.get_active_shop(request):
                 return Response(
                     {'error': 'Vous ne pouvez pas modifier ce produit.'},
                     status=status.HTTP_403_FORBIDDEN
