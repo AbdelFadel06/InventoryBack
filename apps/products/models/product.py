@@ -5,11 +5,19 @@ from decimal import Decimal
 
 class Category(models.Model):
     """
-    Catégorie de produits
+    Catégorie de produits — propre à chaque boutique
     """
+    shop = models.ForeignKey(
+        'shops.Shop',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='categories',
+        verbose_name="Boutique"
+    )
+
     name = models.CharField(
         max_length=100,
-        unique=True,
         verbose_name="Nom de la catégorie"
     )
 
@@ -40,6 +48,7 @@ class Category(models.Model):
         verbose_name = "Catégorie"
         verbose_name_plural = "Catégories"
         ordering = ['name']
+        unique_together = [('shop', 'name')]
 
     def __str__(self):
         return self.name

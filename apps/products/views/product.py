@@ -20,9 +20,9 @@ from apps.accounts.permissions import IsSuperAdmin
 from apps.shops.mixins import ActiveShopMixin
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """
-    ViewSet pour gérer les catégories de produits
+    ViewSet pour gérer les catégories de produits — filtrées par boutique active
     """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
@@ -35,21 +35,30 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Pour Swagger
         if getattr(self, 'swagger_fake_view', False):
             return queryset.none()
 
-        # Filtrer par statut actif
+        # Filtrer par boutique active
+        if not self.request.user.is_super_admin:
+            active_shop = self.get_active_shop(self.request)
+            if active_shop:
+                queryset = queryset.filter(shop=active_shop)
+            else:
+                queryset = queryset.filter(shop__isnull=True)
+
         is_active = self.request.query_params.get('is_active')
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
 
-        # Filtrer par catégorie parente
         parent_id = self.request.query_params.get('parent')
         if parent_id:
             queryset = queryset.filter(parent_id=parent_id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        active_shop = self.get_active_shop(self.request)
+        serializer.save(shop=active_shop)
 
     @action(detail=True, methods=['get'])
     def products(self, request, pk=None):
@@ -123,8 +132,8 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         return queryset.filter(shop__isnull=True)
 
     def perform_create(self, serializer):
-        """Créer un produit"""
-        serializer.save()
+        active_shop = self.get_active_shop(self.request)
+        serializer.save(shop=active_shop)
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):

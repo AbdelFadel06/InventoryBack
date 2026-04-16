@@ -127,8 +127,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
 
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
-            if not validated_data.get('shop') and request.user.shop:
-                validated_data['shop'] = request.user.shop
+            # Le shop est injecté par perform_create via get_active_shop — ne pas écraser
 
         product = Product.objects.create(**validated_data)
 
