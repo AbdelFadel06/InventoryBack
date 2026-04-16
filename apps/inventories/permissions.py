@@ -25,27 +25,19 @@ class CanManageInventories(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user
 
-        # Super Admin peut tout faire
         if user.is_super_admin:
             return True
 
-        # Lecture: voir les inventaires de sa boutique
-        if request.method in permissions.SAFE_METHODS:
-            return obj.shop == user.shop
-
-        # Modification/suppression
-        # Shop Manager peut gérer les inventaires de sa boutique
         if user.is_shop_manager:
-            return obj.shop == user.shop
+            return user.managed_shops.filter(id=obj.shop_id).exists()
 
-        # Employee peut compter dans les inventaires de sa boutique
-        # mais ne peut pas modifier/supprimer
+        # Employee : accès en lecture + comptage uniquement sur sa boutique
         if user.is_employee:
-            if view.action in ['count_product', 'count_multiple']:
+            if view.action in ['count_product', 'count_multiple'] or request.method in permissions.SAFE_METHODS:
                 return obj.shop == user.shop
             return False
 
-        return False
+        return obj.shop == user.shop
 
 
 class CanCountInventory(permissions.BasePermission):
@@ -60,11 +52,12 @@ class CanCountInventory(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user
 
-        # Super Admin peut tout faire
         if user.is_super_admin:
             return True
 
-        # Les autres doivent appartenir à la boutique de l'inventaire
+        if user.is_shop_manager:
+            return user.managed_shops.filter(id=obj.shop_id).exists()
+
         return obj.shop == user.shop
 
 
@@ -82,12 +75,10 @@ class CanValidateInventory(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user
 
-        # Super Admin peut tout faire
         if user.is_super_admin:
             return True
 
-        # Shop Manager peut valider les inventaires de sa boutique
         if user.is_shop_manager:
-            return obj.shop == user.shop
+            return user.managed_shops.filter(id=obj.shop_id).exists()
 
         return False
