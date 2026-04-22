@@ -101,6 +101,27 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         return value
 
 
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer pour la mise à jour complète d'un utilisateur par un admin ou manager.
+    Permet de modifier le rôle, la boutique et les infos profil.
+    """
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 'last_name', 'phone_number',
+            'gender', 'date_of_birth', 'profile_picture',
+            'shop', 'role',
+        ]
+
+    def validate(self, attrs):
+        role = attrs.get('role', self.instance.role if self.instance else None)
+        shop = attrs.get('shop', self.instance.shop if self.instance else None)
+        if role in ('SHOP_MANAGER', 'EMPLOYEE', 'MAGASINIER', 'LIVREUR') and not shop:
+            raise serializers.ValidationError({'shop': "Une boutique est requise pour ce rôle."})
+        return attrs
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     """
     Serializer pour changer le mot de passe

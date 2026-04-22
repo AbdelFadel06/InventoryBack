@@ -9,6 +9,7 @@ from apps.accounts.serializers import (
     UserSerializer,
     UserCreateSerializer,
     UserUpdateSerializer,
+    AdminUserUpdateSerializer,
     ChangePasswordSerializer,
     UserListSerializer
 )
@@ -36,6 +37,8 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return UserCreateSerializer
         elif self.action in ['update', 'partial_update']:
+            if self.request.user.is_super_admin or self.request.user.is_shop_manager:
+                return AdminUserUpdateSerializer
             return UserUpdateSerializer
         elif self.action == 'list':
             return UserListSerializer

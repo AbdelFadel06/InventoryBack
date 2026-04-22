@@ -18,6 +18,7 @@ from apps.products.serializers import (
 from apps.products.permissions import CanManageProducts, CanManageCategories
 from apps.accounts.permissions import IsSuperAdmin
 from apps.shops.mixins import ActiveShopMixin
+from apps.stocks.models import Stock
 
 
 class CategoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
@@ -132,7 +133,12 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         active_shop = self.get_active_shop(self.request)
-        serializer.save(shop=active_shop)
+        product = serializer.save(shop=active_shop)
+        if active_shop:
+            Stock.objects.get_or_create(
+                product=product, shop=active_shop, location='BOUTIQUE',
+                defaults={'quantity': 0},
+            )
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):

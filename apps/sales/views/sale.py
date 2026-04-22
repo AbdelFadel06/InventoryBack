@@ -18,7 +18,7 @@ from apps.sales.serializers.sale import (
 from apps.shops.mixins import ActiveShopMixin
 
 
-class CashierSessionViewSet(viewsets.ModelViewSet):
+class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """Gestion des sessions de caisse — Manager/Admin uniquement"""
     queryset = CashierSession.objects.select_related(
         'shop', 'cashier', 'created_by'
@@ -40,8 +40,9 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
             return qs.none()
         if user.is_super_admin:
             return qs
-        if user.shop:
-            return qs.filter(shop=user.shop)
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return qs.filter(shop=active_shop)
         return qs.none()
 
     @action(detail=False, methods=['get'])
@@ -49,7 +50,7 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
         """Session active — filtrée par caissier pour les employés, par shop pour managers/admins"""
         today = timezone.now().date()
         user  = request.user
-        shop  = user.shop
+        shop  = self.get_active_shop(request)
 
         if not shop and not user.is_super_admin:
             return Response({'error': 'Boutique non assignée.'}, status=400)
@@ -288,10 +289,12 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
             status='completed',
             created_at__date=report_date,
         )
+        active_shop = None
         if not user.is_super_admin:
-            if not user.shop:
+            active_shop = self.get_active_shop(request)
+            if not active_shop:
                 return Response({'error': 'Boutique non assignée.'}, status=400)
-            qs = qs.filter(shop=user.shop)
+            qs = qs.filter(shop=active_shop)
         else:
             shop_id = request.query_params.get('shop')
             if shop_id:
@@ -352,7 +355,7 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         # ── Dépenses ────────────────────────────────────────────────
         shop_filter = {} if user.is_super_admin and not request.query_params.get('shop') else \
                       {'shop_id': request.query_params.get('shop')} if user.is_super_admin else \
-                      {'shop': user.shop}
+                      {'shop': active_shop}
         expenses_qs = Expense.objects.filter(sale_date=report_date, **shop_filter)
         total_expenses = expenses_qs.aggregate(t=Sum('amount'))['t'] or 0
         expenses_list  = ExpenseSerializer(expenses_qs, many=True).data
@@ -398,9 +401,10 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
             created_at__month=month,
         )
         if not user.is_super_admin:
-            if not user.shop:
+            active_shop = self.get_active_shop(request)
+            if not active_shop:
                 return Response({'error': 'Boutique non assignée.'}, status=400)
-            qs = qs.filter(shop=user.shop)
+            qs = qs.filter(shop=active_shop)
 
         daily = (
             qs.annotate(day=TruncDate('created_at'))
