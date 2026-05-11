@@ -3,7 +3,9 @@ from .shop import (
     ShopCreateSerializer,
     ShopUpdateSerializer,
     ShopListSerializer,
-    ShopDetailSerializer
+    ShopDetailSerializer,
+    ShopAssignmentSerializer,
+    ShopAssignEmployeesSerializer,
 )
 
 __all__ = [
@@ -11,5 +13,7 @@ __all__ = [
     'ShopCreateSerializer',
     'ShopUpdateSerializer',
     'ShopListSerializer',
-    'ShopDetailSerializer'
+    'ShopDetailSerializer',
+    'ShopAssignmentSerializer',
+    'ShopAssignEmployeesSerializer',
 ]

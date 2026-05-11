@@ -129,8 +129,16 @@ class Sale(models.Model):
     delivery_address = models.TextField(
         blank=True, null=True, verbose_name="Adresse de livraison"
     )
+    client_phone = models.CharField(
+        max_length=30, blank=True, null=True,
+        verbose_name="Téléphone client"
+    )
     delivered_at = models.DateTimeField(
         null=True, blank=True, verbose_name="Livré le"
+    )
+    livreur_paid = models.BooleanField(
+        default=False,
+        verbose_name="Commission livreur payée"
     )
 
     # Montants
@@ -156,6 +164,7 @@ class Sale(models.Model):
             models.Index(fields=['shop', 'created_at']),
             models.Index(fields=['session', 'created_at']),
             models.Index(fields=['livreur', 'payment_status']),
+            models.Index(fields=['livreur', 'livreur_paid']),
             models.Index(fields=['status']),
         ]
 

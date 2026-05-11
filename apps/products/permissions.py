@@ -23,27 +23,21 @@ class CanManageProducts(permissions.BasePermission):
 
         # Lecture: tout le monde authentifié
         if request.method in permissions.SAFE_METHODS:
-            # Super Admin voit tout
             if user.is_super_admin:
                 return True
-
-            # Les autres voient que les produits de leur boutique
-            # ou les produits communs (shop=None)
-            if obj.shop is None or obj.shop == user.shop:
+            if obj.shop is None:
                 return True
-
-            return False
+            if user.is_shop_manager:
+                return user.managed_shops.filter(id=obj.shop_id).exists()
+            return obj.shop_id == user.shop_id
 
         # Modification/suppression
-        # Super Admin peut tout faire
         if user.is_super_admin:
             return True
-
-        # Shop Manager peut gérer les produits de sa boutique
         if user.is_shop_manager:
-            # Peut gérer les produits sans boutique ou de sa boutique
-            if obj.shop is None or obj.shop == user.shop:
+            if obj.shop is None:
                 return True
+            return user.managed_shops.filter(id=obj.shop_id).exists()
 
         return False
 

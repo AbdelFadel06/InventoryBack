@@ -17,11 +17,13 @@ from apps.products.serializers import (
 )
 from apps.products.permissions import CanManageProducts, CanManageCategories
 from apps.accounts.permissions import IsSuperAdmin
+from apps.shops.mixins import ActiveShopMixin
+from apps.stocks.models import Stock
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """
-    ViewSet pour gérer les catégories de produits
+    ViewSet pour gérer les catégories de produits — filtrées par boutique active
     """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
@@ -34,21 +36,30 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
 
-        # Pour Swagger
         if getattr(self, 'swagger_fake_view', False):
             return queryset.none()
 
-        # Filtrer par statut actif
+        # Filtrer par boutique active
+        if not self.request.user.is_super_admin:
+            active_shop = self.get_active_shop(self.request)
+            if active_shop:
+                queryset = queryset.filter(shop=active_shop)
+            else:
+                queryset = queryset.filter(shop__isnull=True)
+
         is_active = self.request.query_params.get('is_active')
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
 
-        # Filtrer par catégorie parente
         parent_id = self.request.query_params.get('parent')
         if parent_id:
             queryset = queryset.filter(parent_id=parent_id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        active_shop = self.get_active_shop(self.request)
+        serializer.save(shop=active_shop)
 
     @action(detail=True, methods=['get'])
     def products(self, request, pk=None):
@@ -59,11 +70,10 @@ class CategoryViewSet(viewsets.ModelViewSet):
         category = self.get_object()
         products = category.products.filter(is_active=True)
 
-        # Filtrer selon l'utilisateur
-        user = request.user
-        if not user.is_super_admin:
-            if user.shop:
-                products = products.filter(Q(shop=user.shop) | Q(shop__isnull=True))
+        if not request.user.is_super_admin:
+            active_shop = self.get_active_shop(request)
+            if active_shop:
+                products = products.filter(Q(shop=active_shop) | Q(shop__isnull=True))
             else:
                 products = products.filter(shop__isnull=True)
 
@@ -75,7 +85,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         })
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """
     ViewSet pour gérer les produits
 
@@ -113,17 +123,22 @@ class ProductViewSet(viewsets.ModelViewSet):
         if user.is_super_admin:
             return queryset
 
-        # Shop Manager et Employee voient les produits de leur boutique
+        # Shop Manager et Employee voient les produits de la boutique active
         # + les produits communs (sans boutique assignée)
-        if user.shop:
-            return queryset.filter(Q(shop=user.shop) | Q(shop__isnull=True))
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return queryset.filter(Q(shop=active_shop) | Q(shop__isnull=True))
 
-        # Utilisateurs sans boutique voient que les produits communs
         return queryset.filter(shop__isnull=True)
 
     def perform_create(self, serializer):
-        """Créer un produit"""
-        serializer.save()
+        active_shop = self.get_active_shop(self.request)
+        product = serializer.save(shop=active_shop)
+        if active_shop:
+            Stock.objects.get_or_create(
+                product=product, shop=active_shop, location='BOUTIQUE',
+                defaults={'quantity': 0},
+            )
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
@@ -137,7 +152,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Filtrer les produits avec stock bas
         low_stock_products = []
         for product in products:
-            shop = user.shop if user.shop else None
+            shop = self.get_active_shop(self.request)
             if product.is_low_stock(shop):
                 low_stock_products.append(product)
 
@@ -164,7 +179,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Filtrer les produits en rupture
         out_of_stock_products = []
         for product in products:
-            shop = user.shop if user.shop else None
+            shop = self.get_active_shop(self.request)
             if product.get_current_stock(shop) == 0:
                 out_of_stock_products.append(product)
 
@@ -191,7 +206,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Filtrer les produits à réapprovisionner
         reorder_products = []
         for product in products:
-            shop = user.shop if user.shop else None
+            shop = self.get_active_shop(self.request)
             if product.needs_reorder(shop):
                 reorder_products.append(product)
 
@@ -290,7 +305,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         # Vérifier les permissions
         if not request.user.is_super_admin:
-            if product.shop and product.shop != request.user.shop:
+            if product.shop and product.shop != self.get_active_shop(request):
                 return Response(
                     {'error': 'Vous ne pouvez pas modifier ce produit.'},
                     status=status.HTTP_403_FORBIDDEN

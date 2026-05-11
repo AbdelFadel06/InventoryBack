@@ -1,22 +1,10 @@
 from rest_framework import serializers
-from apps.shops.models import Shop
+from apps.shops.models import Shop, ShopAssignment
 from apps.accounts.serializers import UserListSerializer
 
 
 class ShopSerializer(serializers.ModelSerializer):
-    """
-    Serializer complet pour les boutiques
-    """
-    manager_name = serializers.CharField(
-        source='manager.get_full_name',
-        read_only=True,
-        allow_null=True
-    )
-    manager_email = serializers.EmailField(
-        source='manager.email',
-        read_only=True,
-        allow_null=True
-    )
+    managers_details = UserListSerializer(source='managers', many=True, read_only=True)
     total_employees = serializers.IntegerField(read_only=True)
     active_employees = serializers.IntegerField(read_only=True)
     created_by_name = serializers.CharField(
@@ -30,158 +18,104 @@ class ShopSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'slogan', 'logo', 'ifu',
             'phone_number', 'email', 'address', 'city', 'country',
-            'manager', 'manager_name', 'manager_email',
+            'managers', 'managers_details',
             'is_active', 'total_employees', 'active_employees',
             'created_at', 'updated_at', 'created_by', 'created_by_name'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
 
-    def validate_manager(self, value):
-        """Valider que le manager a bien le rôle SHOP_MANAGER"""
-        if value and value.role != 'SHOP_MANAGER':
-            raise serializers.ValidationError(
-                "L'utilisateur sélectionné n'est pas un manager de boutique."
-            )
+    def validate_managers(self, value):
+        for user in value:
+            if user.role != 'SHOP_MANAGER':
+                raise serializers.ValidationError(
+                    f"{user.get_full_name()} n'est pas un manager de boutique."
+                )
         return value
 
     def validate_logo(self, value):
-        """Valider la taille du logo (max 5MB)"""
         if value and value.size > 5 * 1024 * 1024:
-            raise serializers.ValidationError(
-                "La taille du logo ne doit pas dépasser 5MB."
-            )
-        return value
-
-    def validate_ifu(self, value):
-        """Valider le format de l'IFU (optionnel mais si fourni, doit être valide)"""
-        if value:
-            # Retirer les espaces
-            value = value.strip()
-            # Vérifier que ce n'est pas vide après strip
-            if not value:
-                return None
+            raise serializers.ValidationError("La taille du logo ne doit pas dépasser 5MB.")
         return value
 
 
 class ShopCreateSerializer(serializers.ModelSerializer):
-    """
-    Serializer pour la création de boutiques
-    """
     class Meta:
         model = Shop
         fields = [
             'name', 'slogan', 'logo', 'ifu',
             'phone_number', 'email', 'address', 'city', 'country',
-            'manager'
+            'managers'
         ]
 
-    def validate_manager(self, value):
-        """Valider que le manager a bien le rôle SHOP_MANAGER"""
-        if value and value.role != 'SHOP_MANAGER':
-            raise serializers.ValidationError(
-                "L'utilisateur sélectionné n'est pas un manager de boutique."
-            )
-
-        # Vérifier que le manager n'est pas déjà assigné à une autre boutique
-        if value and hasattr(value, 'managed_shop') and value.managed_shop:
-            raise serializers.ValidationError(
-                f"{value.get_full_name()} gère déjà la boutique '{value.managed_shop.name}'."
-            )
-
+    def validate_managers(self, value):
+        for user in value:
+            if user.role != 'SHOP_MANAGER':
+                raise serializers.ValidationError(
+                    f"{user.get_full_name()} n'est pas un manager de boutique."
+                )
         return value
 
     def create(self, validated_data):
-        # Ajouter l'utilisateur qui crée la boutique
+        managers = validated_data.pop('managers', [])
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
 
         shop = Shop.objects.create(**validated_data)
-
-        # Si un manager est assigné, mettre à jour sa boutique
-        if shop.manager:
-            shop.manager.shop = shop
-            shop.manager.save()
+        if managers:
+            shop.managers.set(managers)
+            # Mettre à jour shop sur chaque manager
+            for m in managers:
+                if not m.shop:
+                    m.shop = shop
+                    m.save(update_fields=['shop'])
 
         return shop
 
 
 class ShopUpdateSerializer(serializers.ModelSerializer):
-    """
-    Serializer pour la mise à jour de boutiques
-    """
     class Meta:
         model = Shop
         fields = [
             'name', 'slogan', 'logo', 'ifu',
             'phone_number', 'email', 'address', 'city', 'country',
-            'manager', 'is_active'
+            'managers', 'is_active'
         ]
 
-    def validate_manager(self, value):
-        """Valider que le manager a bien le rôle SHOP_MANAGER"""
-        if value and value.role != 'SHOP_MANAGER':
-            raise serializers.ValidationError(
-                "L'utilisateur sélectionné n'est pas un manager de boutique."
-            )
-
-        # Vérifier que le manager n'est pas déjà assigné à une autre boutique
-        # (sauf s'il s'agit de la boutique actuelle)
-        if value and hasattr(value, 'managed_shop') and value.managed_shop:
-            if value.managed_shop.id != self.instance.id:
+    def validate_managers(self, value):
+        for user in value:
+            if user.role != 'SHOP_MANAGER':
                 raise serializers.ValidationError(
-                    f"{value.get_full_name()} gère déjà la boutique '{value.managed_shop.name}'."
+                    f"{user.get_full_name()} n'est pas un manager de boutique."
                 )
-
         return value
 
     def update(self, instance, validated_data):
-        old_manager = instance.manager
-        new_manager = validated_data.get('manager', old_manager)
-
-        # Mettre à jour la boutique
+        managers = validated_data.pop('managers', None)
         shop = super().update(instance, validated_data)
-
-        # Si le manager a changé
-        if old_manager != new_manager:
-            # Retirer l'ancien manager
-            if old_manager:
-                old_manager.shop = None
-                old_manager.save()
-
-            # Assigner le nouveau manager
-            if new_manager:
-                new_manager.shop = shop
-                new_manager.save()
-
+        if managers is not None:
+            shop.managers.set(managers)
         return shop
 
 
 class ShopListSerializer(serializers.ModelSerializer):
-    """
-    Serializer minimal pour les listes de boutiques
-    """
-    manager_name = serializers.CharField(
-        source='manager.get_full_name',
-        read_only=True,
-        allow_null=True
-    )
+    managers_names = serializers.SerializerMethodField()
     total_employees = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Shop
         fields = [
             'id', 'name', 'logo', 'phone_number',
-            'city', 'manager', 'manager_name',
+            'city', 'managers', 'managers_names',
             'is_active', 'total_employees'
         ]
 
+    def get_managers_names(self, obj):
+        return [m.get_full_name() for m in obj.managers.all()]
+
 
 class ShopDetailSerializer(serializers.ModelSerializer):
-    """
-    Serializer détaillé avec informations sur les employés
-    """
-    manager_details = UserListSerializer(source='manager', read_only=True)
+    managers_details = UserListSerializer(source='managers', many=True, read_only=True)
     employees = UserListSerializer(source='get_employees', many=True, read_only=True)
     total_employees = serializers.IntegerField(read_only=True)
     active_employees = serializers.IntegerField(read_only=True)
@@ -196,7 +130,32 @@ class ShopDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'slogan', 'logo', 'ifu',
             'phone_number', 'email', 'address', 'city', 'country',
-            'manager', 'manager_details', 'employees',
+            'managers', 'managers_details', 'employees',
             'is_active', 'total_employees', 'active_employees',
             'created_at', 'updated_at', 'created_by', 'created_by_name'
         ]
+
+
+class ShopAssignmentSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    shop_name = serializers.CharField(source='shop.name', read_only=True)
+    assigned_by_name = serializers.CharField(source='assigned_by.get_full_name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = ShopAssignment
+        fields = [
+            'id', 'user', 'user_name', 'shop', 'shop_name',
+            'start_date', 'end_date', 'is_active',
+            'assigned_by', 'assigned_by_name', 'note', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'assigned_by']
+
+
+class ShopAssignEmployeesSerializer(serializers.Serializer):
+    """Affecter plusieurs employés à une boutique en une seule requête."""
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1
+    )
+    start_date = serializers.DateField(required=False)
+    note = serializers.CharField(required=False, allow_blank=True)

@@ -9,6 +9,7 @@ from apps.accounts.serializers import (
     UserSerializer,
     UserCreateSerializer,
     UserUpdateSerializer,
+    AdminUserUpdateSerializer,
     ChangePasswordSerializer,
     UserListSerializer
 )
@@ -17,6 +18,7 @@ from apps.accounts.permissions import (
     IsShopManagerOrSuperAdmin,
     CanManageUser
 )
+from apps.shops.models import Shop
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -35,6 +37,8 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return UserCreateSerializer
         elif self.action in ['update', 'partial_update']:
+            if self.request.user.is_super_admin or self.request.user.is_shop_manager:
+                return AdminUserUpdateSerializer
             return UserUpdateSerializer
         elif self.action == 'list':
             return UserListSerializer
@@ -53,29 +57,34 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = super().get_queryset()
 
-        # Super Admin voit tous les utilisateurs
         if user.is_super_admin:
             return queryset
 
-        # Shop Manager voit que les utilisateurs de sa boutique
+        # Manager voit les employés dont home_shop est dans ses boutiques gérées
         if user.is_shop_manager:
-            return queryset.filter(shop=user.shop)
+            managed_shop_ids = user.managed_shops.values_list('id', flat=True)
+            return queryset.filter(home_shop_id__in=managed_shop_ids)
 
-        # Employee voit que son propre profil
         return queryset.filter(id=user.id)
 
     def perform_create(self, serializer):
-        """
-        Création d'utilisateur avec logique métier
-        """
         user = self.request.user
 
-        # Shop Manager peut créer des employés et des livreurs pour sa boutique
         if user.is_shop_manager:
             role = serializer.validated_data.get('role', 'EMPLOYEE')
             if role not in ('EMPLOYEE', 'LIVREUR', 'MAGASINIER'):
                 role = 'EMPLOYEE'
-            serializer.save(role=role, shop=user.shop)
+            # Utilise la boutique active (X-Active-Shop header) si disponible
+            home_shop = None
+            active_shop_id = self.request.headers.get('X-Active-Shop')
+            if active_shop_id:
+                try:
+                    home_shop = user.managed_shops.get(id=int(active_shop_id))
+                except (ValueError, Shop.DoesNotExist):
+                    pass
+            if not home_shop:
+                home_shop = user.managed_shops.first()
+            serializer.save(role=role, shop=home_shop, home_shop=home_shop)
         else:
             serializer.save()
 
@@ -132,15 +141,39 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsShopManagerOrSuperAdmin])
     def employees(self, request):
         """
-        Liste des employés et livreurs
-        GET /api/users/employees/
+        Liste des employés et livreurs.
+        ?shop=<id>       → filtre par boutique courante (user.shop, affectation active)
+        ?home_shop=<id>  → filtre par boutique d'appartenance permanente (user.home_shop)
+        Sans paramètre   → tout le pool (toutes boutiques gérées)
         """
-        queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'LIVREUR', 'MAGASINIER'])
+        user = request.user
+        queryset = self.get_queryset().filter(role__in=['EMPLOYEE', 'MAGASINIER'])
 
-        # Filtre optionnel par boutique (pour Super Admin)
-        shop_id = request.query_params.get('shop')
-        if shop_id and request.user.is_super_admin:
-            queryset = queryset.filter(shop_id=shop_id)
+        def _validate_shop_id(raw_id):
+            """Retourne l'entier si le manager gère cette boutique, sinon None."""
+            try:
+                sid = int(raw_id)
+            except (ValueError, TypeError):
+                return None
+            if user.is_super_admin:
+                return sid
+            if user.is_shop_manager and user.managed_shops.filter(id=sid).exists():
+                return sid
+            return None
+
+        # Filtre par affectation courante
+        shop_param = request.query_params.get('shop')
+        if shop_param:
+            sid = _validate_shop_id(shop_param)
+            if sid:
+                queryset = queryset.filter(shop_id=sid)
+
+        # Filtre par boutique d'appartenance permanente
+        home_shop_param = request.query_params.get('home_shop')
+        if home_shop_param:
+            sid = _validate_shop_id(home_shop_param)
+            if sid:
+                queryset = queryset.filter(home_shop_id=sid)
 
         serializer = UserListSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -148,19 +181,28 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def livreurs(self, request):
         """
-        Liste des livreurs uniquement — accessible à tous les utilisateurs connectés
-        (les caissiers en ont besoin pour les livraisons en POS)
+        Liste des livreurs — filtrés par home_shop du manager (ou shop actif).
+        Les livreurs peuvent travailler pour plusieurs boutiques mais sont
+        visibles uniquement aux managers de la boutique qui les a créés.
         GET /api/users/livreurs/
         """
+        user = request.user
         queryset = User.objects.filter(role='LIVREUR', is_active=True)
 
-        if request.user.is_super_admin:
+        if user.is_super_admin:
             shop_id = request.query_params.get('shop')
             if shop_id:
-                queryset = queryset.filter(shop_id=shop_id)
+                queryset = queryset.filter(home_shop_id=shop_id)
+        elif user.is_shop_manager:
+            # Livreurs dont home_shop est parmi les boutiques gérées
+            managed_shop_ids = user.managed_shops.values_list('id', flat=True)
+            queryset = queryset.filter(home_shop_id__in=managed_shop_ids)
         else:
-            # Filtre par boutique de l'utilisateur connecté
-            queryset = queryset.filter(shop=request.user.shop)
+            # Employé/caissier — livreurs de sa boutique courante
+            if user.shop:
+                queryset = queryset.filter(home_shop=user.shop)
+            else:
+                queryset = queryset.none()
 
         serializer = UserListSerializer(queryset, many=True)
         return Response(serializer.data)

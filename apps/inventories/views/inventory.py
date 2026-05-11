@@ -22,9 +22,10 @@ from apps.inventories.permissions import (
     CanValidateInventory
 )
 from apps.stocks.models import Stock, StockMovement
+from apps.shops.mixins import ActiveShopMixin
 
 
-class InventoryViewSet(viewsets.ModelViewSet):
+class InventoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """
     ViewSet pour gérer les inventaires
 
@@ -66,9 +67,10 @@ class InventoryViewSet(viewsets.ModelViewSet):
         if user.is_super_admin:
             return queryset
 
-        # Les autres voient que les inventaires de leur boutique
-        if user.shop:
-            return queryset.filter(shop=user.shop)
+        # Les autres voient que les inventaires de leur boutique active
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return queryset.filter(shop=active_shop)
 
         return queryset.none()
 

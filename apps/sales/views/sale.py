@@ -15,9 +15,10 @@ from apps.sales.serializers.sale import (
     SaleSerializer, SaleListSerializer, SaleCreateSerializer,
     ExpenseSerializer,
 )
+from apps.shops.mixins import ActiveShopMixin
 
 
-class CashierSessionViewSet(viewsets.ModelViewSet):
+class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """Gestion des sessions de caisse — Manager/Admin uniquement"""
     queryset = CashierSession.objects.select_related(
         'shop', 'cashier', 'created_by'
@@ -39,8 +40,9 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
             return qs.none()
         if user.is_super_admin:
             return qs
-        if user.shop:
-            return qs.filter(shop=user.shop)
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return qs.filter(shop=active_shop)
         return qs.none()
 
     @action(detail=False, methods=['get'])
@@ -48,7 +50,7 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
         """Session active — filtrée par caissier pour les employés, par shop pour managers/admins"""
         today = timezone.now().date()
         user  = request.user
-        shop  = user.shop
+        shop  = self.get_active_shop(request)
 
         if not shop and not user.is_super_admin:
             return Response({'error': 'Boutique non assignée.'}, status=400)
@@ -86,7 +88,7 @@ class CashierSessionViewSet(viewsets.ModelViewSet):
         return Response(CashierSessionSerializer(session).data)
 
 
-class SaleViewSet(viewsets.ModelViewSet):
+class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     queryset = Sale.objects.select_related(
         'shop', 'cashier', 'livreur', 'session'
     ).prefetch_related('items__product').all()
@@ -113,27 +115,31 @@ class SaleViewSet(viewsets.ModelViewSet):
             shop_id = self.request.query_params.get('shop')
             if shop_id:
                 qs = qs.filter(shop_id=shop_id)
-        elif user.shop:
-            qs = qs.filter(shop=user.shop)
-            # Caissier voit toutes les ventes de sa session
-            # Livreur voit ses livraisons
+        else:
+            active_shop = self.get_active_shop(self.request)
+            if not active_shop:
+                return qs.none()
+            qs = qs.filter(shop=active_shop)
+            # Livreur voit uniquement ses propres livraisons
             if hasattr(user, 'role') and user.role == 'LIVREUR':
                 qs = qs.filter(livreur=user)
-        else:
-            return qs.none()
 
         # Filtre par date — uniquement sur la liste, pas sur le détail/cancel/mark_delivered
         if self.action == 'list':
-            date_str = self.request.query_params.get('date')
-            if date_str:
-                try:
-                    filter_date = date.fromisoformat(date_str)
-                    qs = qs.filter(created_at__date=filter_date)
-                except ValueError:
-                    pass
+            # ?all=true → pas de filtre date (pour stats livreurs, historique complet)
+            if self.request.query_params.get('all') == 'true':
+                pass
             else:
-                today = timezone.now().date()
-                qs = qs.filter(created_at__date=today)
+                date_str = self.request.query_params.get('date')
+                if date_str:
+                    try:
+                        filter_date = date.fromisoformat(date_str)
+                        qs = qs.filter(created_at__date=filter_date)
+                    except ValueError:
+                        pass
+                else:
+                    today = timezone.now().date()
+                    qs = qs.filter(created_at__date=today)
 
         return qs
 
@@ -173,7 +179,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def mark_delivered(self, request, pk=None):
-        """Marquer une livraison comme livrée et payée"""
+        """Marquer une livraison comme livrée et payée (client a payé)"""
         sale = self.get_object()
         if sale.sale_type != 'delivery':
             return Response({'error': "Ce n'est pas une livraison."}, status=400)
@@ -185,6 +191,85 @@ class SaleViewSet(viewsets.ModelViewSet):
         sale.save(update_fields=['payment_status', 'delivered_at'])
 
         return Response(SaleSerializer(sale).data)
+
+    @action(detail=True, methods=['post'])
+    def mark_livreur_paid(self, request, pk=None):
+        """Marquer la commission livreur comme payée"""
+        sale = self.get_object()
+        if sale.sale_type != 'delivery':
+            return Response({'error': "Ce n'est pas une livraison."}, status=400)
+        if sale.livreur_paid:
+            return Response({'error': 'Commission déjà marquée comme payée.'}, status=400)
+
+        sale.livreur_paid = True
+        sale.save(update_fields=['livreur_paid'])
+        return Response({'message': 'Commission livreur marquée comme payée.', 'sale_id': sale.id})
+
+    @action(detail=False, methods=['post'])
+    def mark_livreur_paid_bulk(self, request):
+        """Marquer plusieurs commissions livreur comme payées en une fois.
+        Body: { "sale_ids": [1, 2, 3], "livreur_id": 5 }"""
+        sale_ids   = request.data.get('sale_ids', [])
+        livreur_id = request.data.get('livreur_id')
+        if not sale_ids or not livreur_id:
+            return Response({'error': 'sale_ids et livreur_id requis.'}, status=400)
+
+        qs = Sale.objects.filter(
+            id__in=sale_ids,
+            livreur_id=livreur_id,
+            sale_type='delivery',
+            livreur_paid=False,
+        )
+        if not request.user.is_super_admin:
+            active_shop = self.get_active_shop(request)
+            if active_shop:
+                qs = qs.filter(shop=active_shop)
+
+        count = qs.update(livreur_paid=True)
+        return Response({'message': f'{count} commission(s) marquée(s) comme payée(s).', 'count': count})
+
+    @action(detail=False, methods=['get'])
+    def livreur_stats(self, request):
+        """
+        Stats de tous les livreurs pour la boutique active.
+        GET /api/sales/livreur_stats/
+        """
+        user = request.user
+        qs = Sale.objects.filter(sale_type='delivery', status='completed')
+
+        if user.is_super_admin:
+            shop_id = request.query_params.get('shop')
+            if shop_id:
+                qs = qs.filter(shop_id=shop_id)
+        else:
+            active_shop = self.get_active_shop(request)
+            if not active_shop:
+                return Response([])
+            qs = qs.filter(shop=active_shop)
+
+        # Agréger par livreur
+        stats = (
+            qs.values('livreur__id', 'livreur__first_name', 'livreur__last_name')
+            .annotate(
+                total_colis=Count('id'),
+                colis_payes=Count('id', filter=Q(livreur_paid=True)),
+                colis_non_payes=Count('id', filter=Q(livreur_paid=False)),
+                montant_total=Sum('total_amount'),
+            )
+            .order_by('livreur__last_name')
+        )
+
+        return Response([
+            {
+                'livreur_id':      s['livreur__id'],
+                'livreur_name':    f"{s['livreur__first_name']} {s['livreur__last_name']}",
+                'total_colis':     s['total_colis'],
+                'colis_payes':     s['colis_payes'],
+                'colis_non_payes': s['colis_non_payes'],
+                'montant_total':   float(s['montant_total'] or 0),
+            }
+            for s in stats
+        ])
 
     @action(detail=False, methods=['get'])
     def daily_report(self, request):
@@ -204,10 +289,12 @@ class SaleViewSet(viewsets.ModelViewSet):
             status='completed',
             created_at__date=report_date,
         )
+        active_shop = None
         if not user.is_super_admin:
-            if not user.shop:
+            active_shop = self.get_active_shop(request)
+            if not active_shop:
                 return Response({'error': 'Boutique non assignée.'}, status=400)
-            qs = qs.filter(shop=user.shop)
+            qs = qs.filter(shop=active_shop)
         else:
             shop_id = request.query_params.get('shop')
             if shop_id:
@@ -268,7 +355,7 @@ class SaleViewSet(viewsets.ModelViewSet):
         # ── Dépenses ────────────────────────────────────────────────
         shop_filter = {} if user.is_super_admin and not request.query_params.get('shop') else \
                       {'shop_id': request.query_params.get('shop')} if user.is_super_admin else \
-                      {'shop': user.shop}
+                      {'shop': active_shop}
         expenses_qs = Expense.objects.filter(sale_date=report_date, **shop_filter)
         total_expenses = expenses_qs.aggregate(t=Sum('amount'))['t'] or 0
         expenses_list  = ExpenseSerializer(expenses_qs, many=True).data
@@ -314,9 +401,10 @@ class SaleViewSet(viewsets.ModelViewSet):
             created_at__month=month,
         )
         if not user.is_super_admin:
-            if not user.shop:
+            active_shop = self.get_active_shop(request)
+            if not active_shop:
                 return Response({'error': 'Boutique non assignée.'}, status=400)
-            qs = qs.filter(shop=user.shop)
+            qs = qs.filter(shop=active_shop)
 
         daily = (
             qs.annotate(day=TruncDate('created_at'))

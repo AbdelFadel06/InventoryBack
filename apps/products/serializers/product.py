@@ -1,7 +1,15 @@
 from rest_framework import serializers
 from apps.products.models import Product, Category, ProductImage
+from apps.shops.mixins import ActiveShopMixin
 from decimal import Decimal
 import uuid
+
+
+def _get_active_shop(request):
+    """Résout la boutique active depuis le header X-Active-Shop (même logique que ActiveShopMixin)."""
+    if not request or not request.user.is_authenticated:
+        return None
+    return ActiveShopMixin().get_active_shop(request)
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -59,9 +67,8 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_current_stock(self, obj):
         request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.shop:
-            return obj.get_current_stock(shop=request.user.shop)
-        return obj.get_current_stock()
+        shop = _get_active_shop(request)
+        return obj.get_current_stock(shop=shop)
 
     def get_primary_image(self, obj):
         img = obj.images.filter(is_primary=True).first() or obj.images.first()
@@ -127,8 +134,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
 
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
-            if not validated_data.get('shop') and request.user.shop:
-                validated_data['shop'] = request.user.shop
+            # Le shop est injecté par perform_create via get_active_shop — ne pas écraser
 
         product = Product.objects.create(**validated_data)
 
@@ -185,14 +191,14 @@ class ProductListSerializer(serializers.ModelSerializer):
 
     def get_current_stock(self, obj):
         request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.shop:
-            return obj.get_current_stock(shop=request.user.shop)
-        return obj.get_current_stock()
+        shop = _get_active_shop(request)
+        return obj.get_current_stock(shop=shop)
 
     def get_is_low_stock(self, obj):
         request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.shop:
-            return obj.is_low_stock(shop=request.user.shop)
+        shop = _get_active_shop(request)
+        if shop:
+            return obj.is_low_stock(shop=shop)
         return obj.is_low_stock()
 
 
@@ -214,9 +220,8 @@ class ProductStockAlertSerializer(serializers.ModelSerializer):
 
     def get_current_stock(self, obj):
         request = self.context.get('request')
-        if request and hasattr(request, 'user') and request.user.shop:
-            return obj.get_current_stock(shop=request.user.shop)
-        return obj.get_current_stock()
+        shop = _get_active_shop(request)
+        return obj.get_current_stock(shop=shop)
 
     def get_stock_status(self, obj):
         current_stock = self.get_current_stock(obj)

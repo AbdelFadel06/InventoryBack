@@ -127,7 +127,8 @@ class SaleSerializer(serializers.ModelSerializer):
             'cashier', 'cashier_name',
             'sale_type', 'sale_type_label',
             'payment_method', 'payment_label', 'payment_status',
-            'livreur', 'livreur_name', 'delivery_address', 'delivered_at',
+            'livreur', 'livreur_name', 'delivery_address', 'client_phone',
+            'delivered_at', 'livreur_paid',
             'subtotal', 'total_discount', 'total_amount',
             'status', 'notes', 'items', 'items_count',
             'created_at', 'updated_at',
@@ -154,7 +155,7 @@ class SaleListSerializer(serializers.ModelSerializer):
             'id', 'reference', 'sale_type', 'sale_type_label',
             'cashier', 'cashier_name',
             'payment_method', 'payment_label', 'payment_status',
-            'livreur', 'livreur_name',
+            'livreur', 'livreur_name', 'client_phone', 'livreur_paid',
             'total_discount', 'total_amount',
             'status', 'items_count', 'created_at',
         ]
@@ -168,6 +169,7 @@ class SaleCreateSerializer(serializers.Serializer):
     payment_method   = serializers.ChoiceField(choices=['cash', 'mobile_money', 'on_delivery'], default='cash')
     livreur          = serializers.IntegerField(required=False, allow_null=True)
     delivery_address = serializers.CharField(required=False, allow_blank=True)
+    client_phone     = serializers.CharField(required=False, allow_blank=True)
     notes            = serializers.CharField(required=False, allow_blank=True)
     items            = SaleItemCreateSerializer(many=True)
 
@@ -213,9 +215,8 @@ class SaleCreateSerializer(serializers.Serializer):
             if not attrs.get('livreur'):
                 raise serializers.ValidationError({'livreur': "Le livreur est obligatoire pour une livraison."})
             try:
-                livreur = User.objects.get(id=attrs['livreur'], shop=shop)
-                if livreur.role != 'LIVREUR':
-                    raise serializers.ValidationError({'livreur': "Cet utilisateur n'est pas un livreur."})
+                # Les livreurs peuvent travailler pour plusieurs boutiques (home_shop)
+                livreur = User.objects.get(id=attrs['livreur'], role='LIVREUR')
                 attrs['_livreur'] = livreur
             except User.DoesNotExist:
                 raise serializers.ValidationError({'livreur': "Livreur introuvable."})
@@ -255,6 +256,9 @@ class SaleCreateSerializer(serializers.Serializer):
         sale_type      = validated_data.get('sale_type', 'direct')
         payment_method = validated_data.get('payment_method', 'cash')
         payment_status = 'pending' if payment_method == 'on_delivery' else 'paid'
+        # Livraisons cash/mobile_money : pas d'argent à récupérer → livreur déjà réglé
+        # Livraisons on_delivery : livreur collecte le cash chez le client → à régler manuellement
+        livreur_paid_default = (sale_type == 'delivery' and payment_method != 'on_delivery')
 
         sale = Sale.objects.create(
             session=session,
@@ -265,7 +269,9 @@ class SaleCreateSerializer(serializers.Serializer):
             payment_status=payment_status,
             livreur=livreur,
             delivery_address=validated_data.get('delivery_address', ''),
+            client_phone=validated_data.get('client_phone', ''),
             notes=validated_data.get('notes', ''),
+            livreur_paid=livreur_paid_default,
         )
 
         subtotal = Decimal('0.00')
