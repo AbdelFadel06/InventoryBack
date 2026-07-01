@@ -369,6 +369,34 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         )
         return Response(ProductImageSerializer(image).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post'], url_path='generate_barcode')
+    def generate_barcode(self, request, pk=None):
+        """
+        Génère un code-barres pour un produit n'en ayant pas.
+        POST /api/products/{id}/generate_barcode/
+        """
+        product = self.get_object()
+        if product.barcode:
+            return Response({'barcode': product.barcode}, status=status.HTTP_200_OK)
+        product.barcode = f"SHM{product.id:08d}"
+        product.save(update_fields=['barcode'])
+        return Response({'barcode': product.barcode}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='by_barcode')
+    def by_barcode(self, request):
+        """
+        Recherche un produit par code-barres (pour la caisse).
+        GET /api/products/by_barcode/?code=SHM00000001
+        """
+        code = request.query_params.get('code', '').strip()
+        if not code:
+            return Response({'error': 'Paramètre code requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            product = self.get_queryset().get(barcode=code, is_active=True)
+        except Product.DoesNotExist:
+            return Response({'error': 'Produit introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ProductListSerializer(product, context={'request': request}).data)
+
     @action(detail=True, methods=['delete'], url_path=r'remove_image/(?P<image_id>[^/.]+)')
     def remove_image(self, request, pk=None, image_id=None):
         """
