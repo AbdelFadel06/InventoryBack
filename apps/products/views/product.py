@@ -369,6 +369,24 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         )
         return Response(ProductImageSerializer(image).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'], url_path='generate_all_barcodes')
+    def generate_all_barcodes(self, request):
+        """
+        Génère des codes-barres pour tous les produits n'en ayant pas.
+        POST /api/products/generate_all_barcodes/
+        """
+        products = self.get_queryset().filter(barcode__isnull=True, is_active=True)
+        updated = []
+        for p in products:
+            p.barcode = f"SHM{p.id:08d}"
+            updated.append(p)
+        if updated:
+            Product.objects.bulk_update(updated, ['barcode'])
+        return Response({
+            'generated': len(updated),
+            'barcodes': [{'id': p.id, 'name': p.name, 'barcode': p.barcode} for p in updated],
+        })
+
     @action(detail=True, methods=['post'], url_path='generate_barcode')
     def generate_barcode(self, request, pk=None):
         """
