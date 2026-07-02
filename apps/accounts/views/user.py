@@ -1,7 +1,8 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 
 from apps.accounts.models import User
@@ -22,16 +23,14 @@ from apps.shops.models import Shop
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet pour gérer les utilisateurs
-
-    Permissions:
-    - list/retrieve: Super Admin ou Shop Manager (voit que sa boutique)
-    - create: Super Admin ou Shop Manager
-    - update/delete: CanManageUser permission
-    """
-    queryset = User.objects.select_related('shop').all()
+    """Gestion des utilisateurs — Super Admin ou Shop Manager"""
+    queryset         = User.objects.select_related('shop').all()
     permission_classes = [IsAuthenticated]
+    filter_backends  = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['role', 'is_active', 'shop']
+    search_fields    = ['email', 'first_name', 'last_name']
+    ordering_fields  = ['email', 'first_name', 'last_name', 'created_at']
+    ordering         = ['last_name', 'first_name']
 
     def get_serializer_class(self):
         if self.action == 'create':

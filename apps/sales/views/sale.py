@@ -24,8 +24,9 @@ class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         'shop', 'cashier', 'created_by'
     ).all()
     permission_classes = [IsAuthenticated]
-    filter_backends    = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends    = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields   = ['shop', 'status', 'cashier']
+    search_fields      = ['cashier__first_name', 'cashier__last_name', 'cashier__email']
     ordering           = ['-start_date']
 
     def get_serializer_class(self):
@@ -93,8 +94,9 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         'shop', 'cashier', 'livreur', 'session'
     ).prefetch_related('items__product').all()
     permission_classes = [IsAuthenticated]
-    filter_backends    = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends    = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields   = ['status', 'payment_method', 'payment_status', 'sale_type', 'livreur']
+    search_fields      = ['reference', 'cashier__first_name', 'cashier__last_name', 'livreur__first_name', 'livreur__last_name']
     ordering           = ['-created_at']
     http_method_names  = ['get', 'post', 'head', 'options']
 
