@@ -121,15 +121,24 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
 
         # Super Admin voit tous les produits
         if user.is_super_admin:
-            return queryset
+            pass
+        else:
+            # Shop Manager et Employee voient les produits de la boutique active
+            # + les produits communs (sans boutique assignée)
+            active_shop = self.get_active_shop(self.request)
+            if active_shop:
+                queryset = queryset.filter(Q(shop=active_shop) | Q(shop__isnull=True))
+            else:
+                queryset = queryset.filter(shop__isnull=True)
 
-        # Shop Manager et Employee voient les produits de la boutique active
-        # + les produits communs (sans boutique assignée)
-        active_shop = self.get_active_shop(self.request)
-        if active_shop:
-            return queryset.filter(Q(shop=active_shop) | Q(shop__isnull=True))
+        has_barcode = self.request.query_params.get('has_barcode')
+        if has_barcode is not None:
+            if has_barcode.lower() == 'false':
+                queryset = queryset.filter(barcode__isnull=True)
+            elif has_barcode.lower() == 'true':
+                queryset = queryset.exclude(barcode__isnull=True)
 
-        return queryset.filter(shop__isnull=True)
+        return queryset
 
     def perform_create(self, serializer):
         active_shop = self.get_active_shop(self.request)

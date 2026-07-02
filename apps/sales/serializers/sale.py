@@ -155,9 +155,9 @@ class SaleListSerializer(serializers.ModelSerializer):
             'id', 'reference', 'sale_type', 'sale_type_label',
             'cashier', 'cashier_name',
             'payment_method', 'payment_label', 'payment_status',
-            'livreur', 'livreur_name', 'client_phone', 'livreur_paid',
-            'total_discount', 'total_amount',
-            'status', 'items_count', 'created_at',
+            'livreur', 'livreur_name', 'delivery_address', 'client_phone', 'livreur_paid',
+            'delivered_at', 'total_discount', 'total_amount',
+            'status', 'items_count', 'created_at', 'updated_at',
         ]
 
     def get_items_count(self, obj):

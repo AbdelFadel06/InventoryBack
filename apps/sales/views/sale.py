@@ -178,18 +178,161 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         return Response(SaleSerializer(sale).data)
 
     @action(detail=True, methods=['post'])
+    def modify_items(self, request, pk=None):
+        """Modifier le contenu d'une livraison (quantités, ajout, suppression) avec ajustement du stock."""
+        from apps.stocks.models import StockMovement
+        from apps.products.models import Product
+        from django.db import transaction as db_transaction
+        from decimal import Decimal
+
+        sale = self.get_object()
+
+        if sale.sale_type != 'delivery':
+            return Response({'error': "Seules les livraisons peuvent être modifiées."}, status=400)
+        if sale.status == 'cancelled':
+            return Response({'error': "Cette livraison est annulée."}, status=400)
+
+        raw_items = request.data.get('items', [])
+        if not raw_items:
+            return Response({'error': "Au moins un article est requis."}, status=400)
+
+        # Parse and validate input
+        new_items = {}
+        for raw in raw_items:
+            try:
+                pid = int(raw['product_id'])
+                qty = int(raw['quantity'])
+            except (KeyError, TypeError, ValueError):
+                return Response({'error': "product_id (entier) et quantity (entier > 0) requis."}, status=400)
+            if qty <= 0:
+                return Response({'error': f"Quantité invalide pour produit {pid}."}, status=400)
+            new_items[pid] = {
+                'quantity': qty,
+                'unit_price': raw.get('unit_price'),
+            }
+
+        # Pre-validate that new products exist
+        current_ids = set(sale.items.values_list('product_id', flat=True))
+        for pid in new_items:
+            if pid not in current_ids:
+                if not Product.objects.filter(id=pid, is_active=True).exists():
+                    return Response({'error': f"Produit ID {pid} introuvable."}, status=400)
+
+        with db_transaction.atomic():
+            current_items = {item.product_id: item for item in sale.items.select_related('product').all()}
+
+            # Removed items — restore full qty to stock
+            for pid, item in list(current_items.items()):
+                if pid not in new_items:
+                    StockMovement.objects.create(
+                        product=item.product,
+                        shop=sale.shop,
+                        movement_type='return',
+                        quantity=item.quantity,
+                        reference=sale.reference,
+                        reason=f"Modif. livraison {sale.reference} — suppression article",
+                        created_by=request.user,
+                    )
+                    item.delete()
+
+            # Updated items — adjust stock difference
+            for pid, item in current_items.items():
+                if pid in new_items:
+                    new_qty = new_items[pid]['quantity']
+                    diff = new_qty - item.quantity
+                    if diff < 0:
+                        StockMovement.objects.create(
+                            product=item.product,
+                            shop=sale.shop,
+                            movement_type='return',
+                            quantity=-diff,
+                            reference=sale.reference,
+                            reason=f"Modif. livraison {sale.reference} — réduction qté",
+                            created_by=request.user,
+                        )
+                    elif diff > 0:
+                        StockMovement.objects.create(
+                            product=item.product,
+                            shop=sale.shop,
+                            movement_type='exit',
+                            quantity=-diff,
+                            reference=sale.reference,
+                            reason=f"Modif. livraison {sale.reference} — augmentation qté",
+                            created_by=request.user,
+                        )
+                    item.quantity = new_qty
+                    raw_price = new_items[pid]['unit_price']
+                    if raw_price is not None:
+                        item.unit_price = Decimal(str(raw_price))
+                    item.save()
+
+            # New items — decrement stock
+            for pid, data in new_items.items():
+                if pid not in current_items:
+                    product = Product.objects.get(id=pid, is_active=True)
+                    unit_price = Decimal(str(data['unit_price'])) if data['unit_price'] else product.selling_price
+                    SaleItem(
+                        sale=sale,
+                        product=product,
+                        quantity=data['quantity'],
+                        unit_price=unit_price,
+                    ).save()
+                    StockMovement.objects.create(
+                        product=product,
+                        shop=sale.shop,
+                        movement_type='exit',
+                        quantity=-data['quantity'],
+                        reference=sale.reference,
+                        reason=f"Modif. livraison {sale.reference} — ajout article",
+                        created_by=request.user,
+                    )
+
+            # Recalculate from fresh DB query — avoids stale prefetch_related cache
+            fresh_items = SaleItem.objects.filter(sale=sale)
+            sale.subtotal       = sum(item.subtotal       for item in fresh_items)
+            sale.total_discount = sum(item.discount_amount for item in fresh_items)
+            sale.total_amount   = sale.subtotal - sale.total_discount
+            sale.save(update_fields=['subtotal', 'total_discount', 'total_amount'])
+
+        # Return fresh serialized data (prefetch cache on sale is stale)
+        fresh_sale = (
+            Sale.objects
+            .select_related('shop', 'cashier', 'livreur', 'session')
+            .prefetch_related('items__product')
+            .get(id=sale.id)
+        )
+        return Response(SaleSerializer(fresh_sale).data)
+
+    @action(detail=True, methods=['post'])
     def mark_delivered(self, request, pk=None):
-        """Marquer une livraison comme livrée et payée (client a payé)"""
+        """Livreur confirme avoir collecté le paiement client."""
         sale = self.get_object()
         if sale.sale_type != 'delivery':
             return Response({'error': "Ce n'est pas une livraison."}, status=400)
+        if sale.status == 'cancelled':
+            return Response({'error': 'Livraison annulée.'}, status=400)
+        if sale.delivered_at:
+            return Response({'error': 'Collecte déjà confirmée par le livreur.'}, status=400)
+
+        sale.delivered_at = timezone.now()
+        sale.save(update_fields=['delivered_at'])
+        return Response(SaleSerializer(sale).data)
+
+    @action(detail=True, methods=['post'])
+    def validate_payment(self, request, pk=None):
+        """Caissier/manager valide la réception du paiement du livreur."""
+        sale = self.get_object()
+        if sale.sale_type != 'delivery':
+            return Response({'error': "Ce n'est pas une livraison."}, status=400)
+        if sale.status == 'cancelled':
+            return Response({'error': 'Livraison annulée.'}, status=400)
         if sale.payment_status == 'paid':
-            return Response({'error': 'Livraison déjà payée.'}, status=400)
+            return Response({'error': 'Paiement déjà validé.'}, status=400)
 
         sale.payment_status = 'paid'
-        sale.delivered_at   = timezone.now()
+        if not sale.delivered_at:
+            sale.delivered_at = timezone.now()
         sale.save(update_fields=['payment_status', 'delivered_at'])
-
         return Response(SaleSerializer(sale).data)
 
     @action(detail=True, methods=['post'])
@@ -450,7 +593,9 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         elif request.user.role == 'LIVREUR':
             qs = qs.filter(livreur=request.user)
 
-        if not request.user.is_super_admin:
+        # Managers/employees: filtered to their active shop
+        # Livreurs: all their deliveries across all shops
+        if not request.user.is_super_admin and request.user.role != 'LIVREUR':
             qs = qs.filter(shop=request.user.shop)
 
         paid    = qs.filter(payment_status='paid')
