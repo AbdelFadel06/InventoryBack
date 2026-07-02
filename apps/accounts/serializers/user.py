@@ -72,12 +72,18 @@ class UserCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
+        shop = validated_data.get('shop')
+        role = validated_data.get('role')
 
         user = User.objects.create_user(
             username=validated_data['email'].split('@')[0],
             password=password,
             **validated_data
         )
+
+        if role == 'SHOP_MANAGER' and shop:
+            shop.managers.add(user)
+
         return user
 
 
@@ -120,6 +126,26 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         if role in ('SHOP_MANAGER', 'EMPLOYEE', 'MAGASINIER', 'LIVREUR') and not shop:
             raise serializers.ValidationError({'shop': "Une boutique est requise pour ce rôle."})
         return attrs
+
+    def update(self, instance, validated_data):
+        old_shop = instance.shop
+        old_role = instance.role
+
+        instance = super().update(instance, validated_data)
+
+        new_shop = instance.shop
+        new_role = instance.role
+
+        # Retirer de l'ancienne boutique si rôle ou boutique a changé
+        if old_role == 'SHOP_MANAGER' and old_shop:
+            if new_role != 'SHOP_MANAGER' or new_shop != old_shop:
+                old_shop.managers.remove(instance)
+
+        # Ajouter à la nouvelle boutique si manager
+        if new_role == 'SHOP_MANAGER' and new_shop:
+            new_shop.managers.add(instance)
+
+        return instance
 
 
 class ChangePasswordSerializer(serializers.Serializer):
