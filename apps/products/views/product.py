@@ -140,6 +140,40 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
 
         return queryset
 
+    @action(detail=False, methods=['get'], url_path='find_duplicates')
+    def find_duplicates(self, request):
+        """
+        Retourne les produits en doublon (même nom + même boutique).
+        GET /api/products/find_duplicates/
+        """
+        from django.db.models import Count as DjCount
+
+        qs = self.get_queryset()
+
+        # Groupes (name, shop) qui apparaissent plus d'une fois
+        dup_groups = (
+            qs.values('name', 'shop')
+              .annotate(cnt=DjCount('id'))
+              .filter(cnt__gt=1)
+        )
+
+        # Récupérer tous les produits appartenant à ces groupes
+        from django.db.models import Q
+        filter_q = Q()
+        for g in dup_groups:
+            filter_q |= Q(name=g['name'], shop=g['shop'])
+
+        if not filter_q:
+            return Response({'count': 0, 'results': []})
+
+        duplicates = (
+            qs.filter(filter_q)
+              .order_by('name', 'shop', 'created_at')
+        )
+
+        serializer = ProductListSerializer(duplicates, many=True, context={'request': request})
+        return Response({'count': duplicates.count(), 'results': serializer.data})
+
     def perform_create(self, serializer):
         active_shop = self.get_active_shop(self.request)
         product = serializer.save(shop=active_shop)
