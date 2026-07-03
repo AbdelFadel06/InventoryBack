@@ -424,27 +424,40 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     def _is_ean13(value: str) -> bool:
         return bool(value and value.isdigit() and len(value) == 13)
 
+    @staticmethod
+    def _is_system_barcode(value: str) -> bool:
+        """Retourne True si le code a été généré par le système (ancien SHM... ou EAN-13 interne 200...)."""
+        if not value:
+            return False
+        # Ancien format système
+        if value.startswith('SHM'):
+            return True
+        # EAN-13 généré par notre système (préfixe interne 200)
+        if value.isdigit() and len(value) == 13 and value.startswith('200'):
+            return True
+        return False
+
     @action(detail=False, methods=['post'], url_path='generate_all_barcodes')
     def generate_all_barcodes(self, request):
         """
-        Génère des EAN-13 pour tous les produits sans code-barres valide.
+        Génère des EAN-13 pour les produits sans code-barres.
         POST /api/products/generate_all_barcodes/
-        Param optionnel: ?force=true  → régénère aussi les anciens codes non-EAN13
+        Param optionnel: ?force=true → remplace aussi les anciens codes SHM...
+        Les codes saisis manuellement (fournisseur, etc.) ne sont jamais touchés.
         """
         force = request.query_params.get('force', '').lower() == 'true'
         qs = self.get_queryset().filter(is_active=True)
-        if not force:
-            qs = qs.filter(barcode__isnull=True)
-        else:
-            # Régénère les barcodes absents OU non conformes EAN-13
-            qs = qs.filter(
-                Q(barcode__isnull=True) |
-                ~Q(barcode__regex=r'^\d{13}$')
-            )
         updated = []
         for p in qs:
-            p.barcode = self._make_ean13(p.id)
-            updated.append(p)
+            if p.barcode is None:
+                # Pas de code → toujours générer
+                p.barcode = self._make_ean13(p.id)
+                updated.append(p)
+            elif force and self._is_system_barcode(p.barcode):
+                # Ancien code système → remplacer seulement si force=true
+                p.barcode = self._make_ean13(p.id)
+                updated.append(p)
+            # Sinon : code saisi manuellement → ne pas toucher
         if updated:
             Product.objects.bulk_update(updated, ['barcode'])
         return Response({
@@ -457,12 +470,19 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         """
         Génère un EAN-13 pour un produit.
         POST /api/products/{id}/generate_barcode/
-        Param optionnel: ?force=true → régénère même si un code existe déjà
+        - Sans ?force : génère seulement si pas de code, ou si c'est un ancien SHM...
+        - Avec ?force=true : génère même si le produit a un code manuel
+        Les codes manuels (fournisseur) ne sont jamais écrasés sans ?force=true explicite.
         """
         product = self.get_object()
         force = request.query_params.get('force', '').lower() == 'true'
-        if product.barcode and self._is_ean13(product.barcode) and not force:
-            return Response({'barcode': product.barcode}, status=status.HTTP_200_OK)
+        if product.barcode:
+            if force or self._is_system_barcode(product.barcode):
+                # Remplacer : soit force explicite, soit c'est un code système
+                pass
+            else:
+                # Code manuel existant → ne pas toucher
+                return Response({'barcode': product.barcode}, status=status.HTTP_200_OK)
         product.barcode = self._make_ean13(product.id)
         product.save(update_fields=['barcode'])
         return Response({'barcode': product.barcode}, status=status.HTTP_200_OK)
