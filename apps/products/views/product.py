@@ -138,6 +138,14 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
             elif has_barcode.lower() == 'true':
                 queryset = queryset.exclude(barcode__isnull=True)
 
+        # Filtre pour les codes-barres anciens (format SHM généré par le système)
+        has_legacy = self.request.query_params.get('has_legacy_barcode')
+        if has_legacy is not None:
+            if has_legacy.lower() == 'true':
+                queryset = queryset.filter(barcode__startswith='SHM')
+            elif has_legacy.lower() == 'false':
+                queryset = queryset.exclude(barcode__startswith='SHM')
+
         return queryset
 
     @action(detail=False, methods=['get'], url_path='find_duplicates')
