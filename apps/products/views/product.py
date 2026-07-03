@@ -412,16 +412,38 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         )
         return Response(ProductImageSerializer(image).data, status=status.HTTP_201_CREATED)
 
+    @staticmethod
+    def _make_ean13(product_id: int) -> str:
+        """Génère un EAN-13 valide avec préfixe interne 200 (réservé GS1)."""
+        base = f"200{product_id:09d}"  # 12 chiffres
+        total = sum(int(d) * (3 if i % 2 else 1) for i, d in enumerate(base))
+        check = (10 - (total % 10)) % 10
+        return base + str(check)
+
+    @staticmethod
+    def _is_ean13(value: str) -> bool:
+        return bool(value and value.isdigit() and len(value) == 13)
+
     @action(detail=False, methods=['post'], url_path='generate_all_barcodes')
     def generate_all_barcodes(self, request):
         """
-        Génère des codes-barres pour tous les produits n'en ayant pas.
+        Génère des EAN-13 pour tous les produits sans code-barres valide.
         POST /api/products/generate_all_barcodes/
+        Param optionnel: ?force=true  → régénère aussi les anciens codes non-EAN13
         """
-        products = self.get_queryset().filter(barcode__isnull=True, is_active=True)
+        force = request.query_params.get('force', '').lower() == 'true'
+        qs = self.get_queryset().filter(is_active=True)
+        if not force:
+            qs = qs.filter(barcode__isnull=True)
+        else:
+            # Régénère les barcodes absents OU non conformes EAN-13
+            qs = qs.filter(
+                Q(barcode__isnull=True) |
+                ~Q(barcode__regex=r'^\d{13}$')
+            )
         updated = []
-        for p in products:
-            p.barcode = f"SHM{p.id:08d}"
+        for p in qs:
+            p.barcode = self._make_ean13(p.id)
             updated.append(p)
         if updated:
             Product.objects.bulk_update(updated, ['barcode'])
@@ -433,13 +455,15 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='generate_barcode')
     def generate_barcode(self, request, pk=None):
         """
-        Génère un code-barres pour un produit n'en ayant pas.
+        Génère un EAN-13 pour un produit.
         POST /api/products/{id}/generate_barcode/
+        Param optionnel: ?force=true → régénère même si un code existe déjà
         """
         product = self.get_object()
-        if product.barcode:
+        force = request.query_params.get('force', '').lower() == 'true'
+        if product.barcode and self._is_ean13(product.barcode) and not force:
             return Response({'barcode': product.barcode}, status=status.HTTP_200_OK)
-        product.barcode = f"SHM{product.id:08d}"
+        product.barcode = self._make_ean13(product.id)
         product.save(update_fields=['barcode'])
         return Response({'barcode': product.barcode}, status=status.HTTP_200_OK)
 
