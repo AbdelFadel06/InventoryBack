@@ -6,19 +6,20 @@ from django.utils import timezone
 
 
 class StockSerializer(serializers.ModelSerializer):
-    product_name    = serializers.CharField(source='product.name', read_only=True)
-    product_sku     = serializers.CharField(source='product.sku',  read_only=True)
-    product_image   = serializers.SerializerMethodField()
-    shop_name       = serializers.CharField(source='shop.name',    read_only=True)
-    unit            = serializers.CharField(source='product.unit', read_only=True)
-    is_low_stock    = serializers.BooleanField(read_only=True)
-    needs_reorder   = serializers.BooleanField(read_only=True)
-    stock_status    = serializers.CharField(read_only=True)
-    stock_value     = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
-    minimum_stock   = serializers.IntegerField(source='product.minimum_stock', read_only=True)
-    reorder_level   = serializers.IntegerField(source='product.reorder_level', read_only=True)
-    updated_by_name = serializers.CharField(source='updated_by.get_full_name', read_only=True, allow_null=True)
-    location_display = serializers.CharField(source='get_location_display', read_only=True)
+    product_name         = serializers.CharField(source='product.name',          read_only=True)
+    product_sku          = serializers.CharField(source='product.sku',           read_only=True)
+    product_image        = serializers.SerializerMethodField()
+    product_selling_price = serializers.DecimalField(source='product.selling_price', max_digits=12, decimal_places=2, read_only=True)
+    shop_name            = serializers.CharField(source='shop.name',             read_only=True)
+    unit                 = serializers.CharField(source='product.unit',          read_only=True)
+    is_low_stock         = serializers.BooleanField(read_only=True)
+    needs_reorder        = serializers.BooleanField(read_only=True)
+    stock_status         = serializers.CharField(read_only=True)
+    stock_value          = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    minimum_stock        = serializers.IntegerField(source='product.minimum_stock', read_only=True)
+    reorder_level        = serializers.IntegerField(source='product.reorder_level', read_only=True)
+    updated_by_name      = serializers.CharField(source='updated_by.get_full_name', read_only=True, allow_null=True)
+    location_display     = serializers.CharField(source='get_location_display',  read_only=True)
 
     def get_product_image(self, obj):
         img = obj.product.images.filter(is_primary=True).first()
@@ -31,6 +32,7 @@ class StockSerializer(serializers.ModelSerializer):
         model  = Stock
         fields = [
             'id', 'product', 'product_name', 'product_sku', 'product_image',
+            'product_selling_price',
             'shop', 'shop_name', 'location', 'location_display', 'quantity', 'unit',
             'is_low_stock', 'needs_reorder', 'stock_status',
             'minimum_stock', 'reorder_level', 'stock_value',
@@ -40,13 +42,14 @@ class StockSerializer(serializers.ModelSerializer):
 
 
 class StockListSerializer(serializers.ModelSerializer):
-    product_name     = serializers.CharField(source='product.name', read_only=True)
-    product_sku      = serializers.CharField(source='product.sku',  read_only=True)
-    product_image    = serializers.SerializerMethodField()
-    shop_name        = serializers.CharField(source='shop.name',    read_only=True)
-    stock_status     = serializers.CharField(read_only=True)
-    stock_value      = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
-    location_display = serializers.CharField(source='get_location_display', read_only=True)
+    product_name          = serializers.CharField(source='product.name',          read_only=True)
+    product_sku           = serializers.CharField(source='product.sku',           read_only=True)
+    product_image         = serializers.SerializerMethodField()
+    product_selling_price = serializers.DecimalField(source='product.selling_price', max_digits=12, decimal_places=2, read_only=True)
+    shop_name             = serializers.CharField(source='shop.name',             read_only=True)
+    stock_status          = serializers.CharField(read_only=True)
+    stock_value           = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    location_display      = serializers.CharField(source='get_location_display',  read_only=True)
 
     def get_product_image(self, obj):
         img = obj.product.images.filter(is_primary=True).first()
@@ -59,6 +62,7 @@ class StockListSerializer(serializers.ModelSerializer):
         model  = Stock
         fields = [
             'id', 'product', 'product_name', 'product_sku', 'product_image',
+            'product_selling_price',
             'shop', 'shop_name', 'location', 'location_display',
             'quantity', 'stock_status', 'stock_value',
         ]

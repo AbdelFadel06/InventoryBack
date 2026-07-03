@@ -510,6 +510,24 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
             return Response({'error': 'Produit introuvable.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(ProductListSerializer(product, context={'request': request}).data)
 
+    def destroy(self, request, *args, **kwargs):
+        product = self.get_object()
+        total_stock = Stock.objects.filter(product=product).aggregate(
+            total=Sum('quantity')
+        )['total'] or 0
+        if total_stock > 0:
+            return Response(
+                {
+                    'error': (
+                        f'Impossible de supprimer "{product.name}" : '
+                        f'ce produit a encore {total_stock} unité(s) en stock. '
+                        f'Retirez le stock avant de supprimer l\'article.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['delete'], url_path=r'remove_image/(?P<image_id>[^/.]+)')
     def remove_image(self, request, pk=None, image_id=None):
         """
