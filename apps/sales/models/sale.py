@@ -142,9 +142,10 @@ class Sale(models.Model):
     )
 
     # Montants
-    subtotal       = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    total_discount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    total_amount   = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    subtotal        = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    order_discount  = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    total_discount  = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    total_amount    = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
     # Statut
     status = models.CharField(
@@ -178,10 +179,10 @@ class Sale(models.Model):
 
     def recalculate_totals(self):
         subtotal = sum(item.subtotal for item in self.items.all())
-        discount = sum(item.discount_amount for item in self.items.all())
+        item_discount = sum(item.discount_amount for item in self.items.all())
         self.subtotal       = subtotal
-        self.total_discount = discount
-        self.total_amount   = subtotal - discount
+        self.total_discount = item_discount + self.order_discount
+        self.total_amount   = subtotal - self.total_discount
         self.save(update_fields=['subtotal', 'total_discount', 'total_amount'])
 
 

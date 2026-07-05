@@ -129,7 +129,7 @@ class SaleSerializer(serializers.ModelSerializer):
             'payment_method', 'payment_label', 'payment_status',
             'livreur', 'livreur_name', 'delivery_address', 'client_phone',
             'delivered_at', 'livreur_paid',
-            'subtotal', 'total_discount', 'total_amount',
+            'subtotal', 'order_discount', 'total_discount', 'total_amount',
             'status', 'notes', 'items', 'items_count',
             'created_at', 'updated_at',
         ]
@@ -171,6 +171,11 @@ class SaleCreateSerializer(serializers.Serializer):
     delivery_address = serializers.CharField(required=False, allow_blank=True)
     client_phone     = serializers.CharField(required=False, allow_blank=True)
     notes            = serializers.CharField(required=False, allow_blank=True)
+    order_discount   = serializers.DecimalField(
+        max_digits=12, decimal_places=2,
+        required=False, default=Decimal('0.00'),
+        min_value=Decimal('0.00'),
+    )
     items            = SaleItemCreateSerializer(many=True)
 
     def validate_items(self, value):
@@ -306,10 +311,12 @@ class SaleCreateSerializer(serializers.Serializer):
                 created_by=request.user,
             )
 
-        sale.subtotal       = subtotal
-        sale.total_discount = discount
-        sale.total_amount   = subtotal - discount
-        sale.save(update_fields=['subtotal', 'total_discount', 'total_amount'])
+        order_discount = validated_data.get('order_discount', Decimal('0.00'))
+        sale.order_discount  = order_discount
+        sale.subtotal        = subtotal
+        sale.total_discount  = discount + order_discount
+        sale.total_amount    = subtotal - discount - order_discount
+        sale.save(update_fields=['subtotal', 'order_discount', 'total_discount', 'total_amount'])
 
         return sale
 
