@@ -99,8 +99,6 @@ def _send(subject: str, text: str, html: str, to: str) -> None:
         reply_to=[settings.EMAIL_HOST_USER],
         headers={
             'X-Mailer': 'ShopM',
-            'Precedence': 'bulk',
-            'X-Auto-Response-Suppress': 'OOF, DR, RN, NRN, AutoReply',
         },
     )
     msg.attach_alternative(html, 'text/html')
