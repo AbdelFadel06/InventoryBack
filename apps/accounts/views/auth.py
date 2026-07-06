@@ -2,7 +2,7 @@
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -90,17 +90,32 @@ def _reset_html(user: User, url: str) -> str:
 
 # ── Helpers publics ───────────────────────────────────────────────────────────
 
+def _send(subject: str, text: str, html: str, to: str) -> None:
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[to],
+        reply_to=[settings.EMAIL_HOST_USER],
+        headers={
+            'X-Mailer': 'ShopM',
+            'Precedence': 'bulk',
+            'X-Auto-Response-Suppress': 'OOF, DR, RN, NRN, AutoReply',
+        },
+    )
+    msg.attach_alternative(html, 'text/html')
+    msg.send(fail_silently=False)
+
+
 def send_activation_email(user: User) -> None:
     uid   = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     url   = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
-    send_mail(
-        subject='Bienvenue sur ShopM — Activez votre compte',
-        message=f'Activez votre compte : {url}',
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        html_message=_activation_html(user, url),
-        fail_silently=False,
+    _send(
+        subject=f'Bienvenue sur ShopM, {user.first_name} — Activez votre compte',
+        text=f'Bonjour {user.first_name},\n\nActivez votre compte ici : {url}\n\nCe lien expire dans 3 jours.',
+        html=_activation_html(user, url),
+        to=user.email,
     )
 
 
@@ -128,13 +143,11 @@ class PasswordResetRequestView(APIView):
         url   = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
 
         try:
-            send_mail(
-                subject='Réinitialisation de votre mot de passe — ShopM',
-                message=f'Réinitialisez votre mot de passe : {url}',
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=_reset_html(user, url),
-                fail_silently=False,
+            _send(
+                subject=f'Réinitialisation de votre mot de passe ShopM, {user.first_name}',
+                text=f'Bonjour {user.first_name},\n\nRéinitialisez votre mot de passe ici : {url}\n\nCe lien expire dans 3 jours.\n\nSi vous n\'êtes pas à l\'origine de cette demande, ignorez cet email.',
+                html=_reset_html(user, url),
+                to=user.email,
             )
         except Exception:
             return Response(
