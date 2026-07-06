@@ -67,13 +67,14 @@ class UserViewSet(viewsets.ModelViewSet):
         return queryset.filter(id=user.id)
 
     def perform_create(self, serializer):
+        from apps.accounts.views.auth import send_activation_email
+
         user = self.request.user
 
         if user.is_shop_manager:
             role = serializer.validated_data.get('role', 'EMPLOYEE')
             if role not in ('EMPLOYEE', 'LIVREUR', 'MAGASINIER'):
                 role = 'EMPLOYEE'
-            # Utilise la boutique active (X-Active-Shop header) si disponible
             home_shop = None
             active_shop_id = self.request.headers.get('X-Active-Shop')
             if active_shop_id:
@@ -83,9 +84,15 @@ class UserViewSet(viewsets.ModelViewSet):
                     pass
             if not home_shop:
                 home_shop = user.managed_shops.first()
-            serializer.save(role=role, shop=home_shop, home_shop=home_shop)
+            created = serializer.save(role=role, shop=home_shop, home_shop=home_shop)
         else:
-            serializer.save()
+            created = serializer.save()
+
+        # Email d'activation (non bloquant si SMTP non configuré)
+        try:
+            send_activation_email(created)
+        except Exception:
+            pass
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):

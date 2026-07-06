@@ -82,7 +82,8 @@ class User(AbstractUser):
     )
 
     # Métadonnées
-    is_active = models.BooleanField(default=True, verbose_name="Actif")
+    is_active      = models.BooleanField(default=True,  verbose_name="Actif")
+    email_verified = models.BooleanField(default=False, verbose_name="Email vérifié")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Date de modification")
 
