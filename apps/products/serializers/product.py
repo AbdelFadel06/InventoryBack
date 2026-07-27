@@ -106,11 +106,12 @@ class ProductCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'name', 'description', 'sku', 'barcode',
+            'id', 'name', 'description', 'sku', 'barcode',
             'category', 'selling_price',
             'unit', 'minimum_stock', 'reorder_level', 'shop',
             'image_urls',
         ]
+        read_only_fields = ['id']
 
     def validate_sku(self, value):
         if value:
