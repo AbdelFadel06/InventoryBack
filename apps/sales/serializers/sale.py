@@ -189,7 +189,7 @@ class SaleCreateSerializer(serializers.Serializer):
         from apps.accounts.models import User
 
         request = self.context.get('request')
-        shop    = request.user.shop
+        shop    = self.context.get('active_shop') or request.user.shop
 
         if not shop:
             raise serializers.ValidationError("Vous n'êtes pas assigné à une boutique.")
@@ -253,7 +253,7 @@ class SaleCreateSerializer(serializers.Serializer):
         from apps.stocks.models import StockMovement
 
         request  = self.context.get('request')
-        shop     = request.user.shop
+        shop     = self.context.get('active_shop') or request.user.shop
         session  = validated_data.pop('_session')
         livreur  = validated_data.pop('_livreur', None)
         items    = validated_data.pop('items')
@@ -335,5 +335,5 @@ class ExpenseSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
-            validated_data['shop']       = request.user.shop
+            validated_data['shop']       = self.context.get('active_shop') or request.user.shop
         return Expense.objects.create(**validated_data)

@@ -107,6 +107,11 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
             return SaleListSerializer
         return SaleSerializer
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['active_shop'] = self.get_active_shop(self.request)
+        return ctx
+
     def get_queryset(self):
         qs   = super().get_queryset()
         user = self.request.user
@@ -614,12 +619,17 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         })
 
 
-class ExpenseViewSet(viewsets.ModelViewSet):
+class ExpenseViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     queryset = Expense.objects.select_related('session', 'shop', 'created_by').all()
     permission_classes = [IsAuthenticated]
     serializer_class   = ExpenseSerializer
     filter_backends    = [DjangoFilterBackend]
     filterset_fields   = ['session', 'sale_date']
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['active_shop'] = self.get_active_shop(self.request)
+        return ctx
 
     def get_queryset(self):
         qs   = super().get_queryset()
@@ -628,6 +638,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             return qs.none()
         if user.is_super_admin:
             return qs
-        if user.shop:
-            return qs.filter(shop=user.shop)
+        active_shop = self.get_active_shop(self.request)
+        if active_shop:
+            return qs.filter(shop=active_shop)
         return qs.none()
