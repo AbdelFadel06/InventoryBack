@@ -29,10 +29,12 @@ class ActiveShopMixin:
         if shop_id:
             try:
                 shop_id = int(shop_id)
-                # Vérifier que le manager gère bien cette boutique
                 if user.role == 'SHOP_MANAGER':
+                    # Vérifie ManyToMany (managed_shops) OU FK direct (user.shop)
                     if user.managed_shops.filter(id=shop_id).exists():
                         return Shop.objects.get(id=shop_id)
+                    if user.shop_id == shop_id:
+                        return user.shop
                 elif user.shop_id == shop_id:
                     return user.shop
             except (ValueError, Shop.DoesNotExist):

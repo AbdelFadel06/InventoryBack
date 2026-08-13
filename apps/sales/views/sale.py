@@ -152,7 +152,8 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         serializer = SaleCreateSerializer(
-            data=request.data, context={'request': request}
+            data=request.data,
+            context={'request': request, 'active_shop': self.get_active_shop(request)},
         )
         serializer.is_valid(raise_exception=True)
         sale = serializer.save()
