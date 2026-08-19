@@ -27,8 +27,7 @@ jobs:
 
             sudo systemctl restart gunicorn
 
-            # Déployer le script de backup système
-            sudo cp scripts/backup-db.sh /usr/local/bin/shopm-backup.sh
-            sudo chmod +x /usr/local/bin/shopm-backup.sh
+            # S'assurer que le script de backup est exécutable après git pull
+            chmod +x scripts/backup-db.sh
 
             echo "✅ Backend déployé avec succès"
