@@ -23,8 +23,8 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 # Lire une variable depuis le fichier .env
 env_var() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"'"'"' '; }
 
-send_failure_email() {
-  local error_msg="$1"
+send_email() {
+  local subject="$1" body="$2"
   local smtp_host smtp_port smtp_user smtp_pass
   smtp_host=$(env_var EMAIL_HOST)
   smtp_port=$(env_var EMAIL_PORT)
@@ -37,19 +37,8 @@ send_failure_email() {
 import smtplib
 from email.mime.text import MIMEText
 
-body = """Bonjour,
-
-Le backup automatique de ShopM a échoué.
-
-Date  : $(date '+%Y-%m-%d à %H:%M')
-Erreur: ${error_msg}
-
-Consultez le journal : /var/log/shopm-backup.log
-
--- ShopM Backup Monitor (Hetzner VPS)
-"""
-msg = MIMEText(body, 'plain', 'utf-8')
-msg['Subject'] = '[ShopM] ALERTE — Backup base de données échoué'
+msg = MIMEText("""${body}""", 'plain', 'utf-8')
+msg['Subject'] = '${subject}'
 msg['From'] = '${smtp_user}'
 msg['To'] = '${ADMIN_EMAIL}'
 
@@ -63,10 +52,47 @@ print("Email envoyé")
 PYEOF
 }
 
+send_failure_email() {
+  local error_msg="$1"
+  local body
+  body="Bonjour,
+
+Le backup automatique de ShopM a ÉCHOUÉ.
+
+Date   : $(date '+%Y-%m-%d à %H:%M')
+Erreur : ${error_msg}
+
+Consultez le journal : /var/log/shopm-backup.log
+
+-- ShopM Backup Monitor (Hetzner VPS)"
+
+  send_email "[ShopM] ❌ ALERTE — Backup base de données échoué" "$body" 2>/dev/null
+}
+
+send_success_email() {
+  local size="$1" file="$2"
+  local body
+  body="Bonjour,
+
+Le backup automatique de ShopM s'est terminé avec succès.
+
+Date     : $(date '+%Y-%m-%d à %H:%M')
+Fichier  : $(basename "$file")
+Taille   : ${size}
+Stockage : Backblaze B2 → shopm-backups/db/
+Rétention: 7 jours sur B2, 3 jours en local
+
+Aucune action requise.
+
+-- ShopM Backup Monitor (Hetzner VPS)"
+
+  send_email "[ShopM] ✅ Backup OK — $(date '+%Y-%m-%d')" "$body" 2>/dev/null
+}
+
 on_error() {
   local line=$1 code=$2
   log "ERREUR à la ligne ${line} (code retour: ${code})"
-  send_failure_email "Ligne ${line}, code ${code}" 2>/dev/null \
+  send_failure_email "Ligne ${line}, code ${code}" \
     || log "Impossible d'envoyer l'email d'alerte (SMTP non configuré ?)"
   exit 1
 }
@@ -131,4 +157,7 @@ find "$BACKUP_DIR" -name "shopm_*.sql.gz" -mtime "+${LOCAL_KEEP_DAYS}" -delete
 log "Nettoyage local : > ${LOCAL_KEEP_DAYS} jours supprimés"
 
 log "Backup terminé avec succès ✓"
+send_success_email "$SIZE" "$BACKUP_FILE" \
+  && log "Email de confirmation envoyé ✓" \
+  || log "Email non envoyé (SMTP non configuré ?)"
 log "══════════════════════════════════════════"
