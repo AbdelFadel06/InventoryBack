@@ -8,7 +8,7 @@ set -uo pipefail
 ENV_FILE="/var/www/shopm/backend/.env"
 BACKUP_DIR="/var/backups/shopm"
 B2_REMOTE="backblaze"
-B2_BUCKET="shopm-backups"
+B2_BUCKET="shopm-backups-prod"
 B2_PREFIX="db"
 LOCAL_KEEP_DAYS=3
 LOG_FILE="/var/log/shopm-backup.log"
