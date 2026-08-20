@@ -21,7 +21,7 @@ BACKUP_FILE="${BACKUP_DIR}/shopm_${TIMESTAMP}.sql.gz"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 # Lire une variable depuis le fichier .env
-env_var() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"'"'"' '; }
+env_var() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"'"'"' ' || true; }
 
 send_email() {
   local subject="$1" body="$2"
