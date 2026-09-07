@@ -534,6 +534,103 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         })
 
     @action(detail=False, methods=['get'])
+    def period_report(self, request):
+        """
+        Bilan sur une période (intervalle de dates)
+        GET /api/sales/period_report/?date_from=2026-08-01&date_to=2026-08-07
+        """
+        user = request.user
+        date_from_str = request.query_params.get('date_from')
+        date_to_str   = request.query_params.get('date_to')
+
+        if not date_from_str or not date_to_str:
+            return Response({'error': 'Paramètres date_from et date_to requis.'}, status=400)
+
+        try:
+            date_from = date.fromisoformat(date_from_str)
+            date_to   = date.fromisoformat(date_to_str)
+        except ValueError:
+            return Response({'error': 'Format invalide. Utilisez YYYY-MM-DD.'}, status=400)
+
+        if date_from > date_to:
+            return Response({'error': 'date_from doit être antérieure à date_to.'}, status=400)
+
+        qs = Sale.objects.filter(
+            status='completed',
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+        )
+        active_shop = None
+        if not user.is_super_admin:
+            active_shop = self.get_active_shop(request)
+            if not active_shop:
+                return Response({'error': 'Boutique non assignée.'}, status=400)
+            qs = qs.filter(shop=active_shop)
+        else:
+            shop_id = request.query_params.get('shop')
+            if shop_id:
+                qs = qs.filter(shop_id=shop_id)
+
+        totals = qs.aggregate(
+            total_sales=Count('id'),
+            total_amount=Sum('total_amount'),
+            total_discount=Sum('total_discount'),
+        )
+
+        cash_total = qs.filter(
+            payment_method__in=['cash', 'on_delivery'], payment_status='paid'
+        ).aggregate(t=Sum('total_amount'))['t'] or 0
+
+        momo_total = qs.filter(
+            payment_method='mobile_money', payment_status='paid'
+        ).aggregate(t=Sum('total_amount'))['t'] or 0
+
+        deliveries_pending = qs.filter(
+            sale_type='delivery', payment_status='pending'
+        ).aggregate(t=Sum('total_amount'))['t'] or 0
+
+        items_qs = SaleItem.objects.filter(
+            sale__in=qs
+        ).values(
+            'product__id', 'product__name', 'product__sku', 'product__unit',
+        ).annotate(
+            total_qty=Sum('quantity'),
+            total_subtotal=Sum('subtotal'),
+            total_discount=Sum('discount_amount'),
+            total_amount=Sum('total_price'),
+        ).order_by('-total_amount')
+
+        shop_filter = {} if user.is_super_admin and not request.query_params.get('shop') else \
+                      {'shop_id': request.query_params.get('shop')} if user.is_super_admin else \
+                      {'shop': active_shop}
+        expenses_qs    = Expense.objects.filter(
+            sale_date__gte=date_from, sale_date__lte=date_to, **shop_filter
+        )
+        total_expenses = expenses_qs.aggregate(t=Sum('amount'))['t'] or 0
+        expenses_list  = ExpenseSerializer(expenses_qs, many=True).data
+
+        total_collected = cash_total + momo_total
+        net_total       = total_collected - total_expenses
+
+        return Response({
+            'date_from': str(date_from),
+            'date_to':   str(date_to),
+            'summary': {
+                'total_sales':         totals['total_sales']    or 0,
+                'total_amount':        totals['total_amount']   or 0,
+                'total_discount':      totals['total_discount'] or 0,
+                'cash_total':          cash_total,
+                'momo_total':          momo_total,
+                'deliveries_pending':  deliveries_pending,
+                'total_expenses':      total_expenses,
+                'total_collected':     total_collected,
+                'net_total':           net_total,
+            },
+            'products_recap': list(items_qs),
+            'expenses':       expenses_list,
+        })
+
+    @action(detail=False, methods=['get'])
     def monthly_summary(self, request):
         """
         Résumé journalier d'un mois — pour l'historique des ventes
