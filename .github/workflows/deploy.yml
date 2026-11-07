@@ -21,10 +21,10 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            source venv/bin/activate
-            pip install -r requirements.txt --quiet
-            python3 manage.py migrate --no-input
-            python3 manage.py collectstatic --no-input
+            # Toujours le Python du venv : « pip » seul installait les paquets ailleurs.
+            venv/bin/python -m pip install -r requirements.txt --quiet
+            venv/bin/python manage.py migrate --no-input
+            venv/bin/python manage.py collectstatic --no-input
 
             sudo systemctl restart gunicorn
 
