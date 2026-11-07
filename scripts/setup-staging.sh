@@ -124,6 +124,13 @@ deploy_backend() {
   "$PYTHON" -m pip install --quiet -r "$BACKEND_DIR/requirements.txt"
 
   cd "$BACKEND_DIR"
+  # Clés des notifications téléphone : gardées hors du dépôt pour survivre aux réinstallations
+  # (en changer désabonnerait les téléphones). Jamais affichées.
+  local vapid_file="$ROOT/vapid.env"
+  if ! grep -q '^VAPID_PRIVATE_KEY=' "$ENV_FILE"; then
+    [[ -s "$vapid_file" ]] || (umask 077; "$PYTHON" manage.py generate_vapid_keys > "$vapid_file")
+    cat "$vapid_file" >> "$ENV_FILE"
+  fi
   "$PYTHON" manage.py migrate --no-input
   "$PYTHON" manage.py collectstatic --no-input --verbosity 0
 

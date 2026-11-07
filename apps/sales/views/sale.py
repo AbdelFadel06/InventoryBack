@@ -317,6 +317,17 @@ class SaleViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
         serializer = SaleIssueCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         issue = sale.issues.create(reported_by=request.user, **serializer.validated_data)
+
+        from apps.notifications.push import notify_shop_managers
+        reporter = request.user.get_full_name() or request.user.email
+        amount = f"{sale.total_amount:,.0f}".replace(',', ' ')
+        notify_shop_managers(
+            sale.shop,
+            title=f"Vente signalée · {sale.shop.name}",
+            body=f"{sale.reference} ({amount} F) — {issue.get_reason_display()}, par {reporter}",
+            url=f"/manager/signalements?sale={sale.id}&shop={sale.shop_id}",
+            tag=f"issue-{sale.id}",
+        )
         return Response(SaleIssueSerializer(issue).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
