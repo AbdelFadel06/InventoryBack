@@ -1,5 +1,15 @@
 from rest_framework import permissions
 
+# Seuls rôles qu'un manager peut créer ou gérer. Les managers sont créés par le Super Admin.
+MANAGER_MANAGEABLE_ROLES = ('EMPLOYEE', 'LIVREUR', 'MAGASINIER')
+
+
+def manager_can_manage(manager, target):
+    """Le manager gère ce compte : rôle autorisé, et rattaché ou affecté à l'une de ses boutiques."""
+    if target.role not in MANAGER_MANAGEABLE_ROLES:
+        return False
+    return manager.managed_shops.filter(id__in=[target.home_shop_id, target.shop_id]).exists()
+
 
 class IsSuperAdmin(permissions.BasePermission):
     """
@@ -30,7 +40,8 @@ class CanManageUser(permissions.BasePermission):
     """
     Permission pour gérer les utilisateurs selon le rôle
     - SUPER_ADMIN: peut tout gérer
-    - SHOP_MANAGER: peut gérer les utilisateurs de sa boutique uniquement
+    - SHOP_MANAGER: employés, livreurs et magasiniers des boutiques qu'il gère,
+      suppression limitée aux employés
     """
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -39,11 +50,10 @@ class CanManageUser(permissions.BasePermission):
         if user.is_super_admin:
             return True
 
-        # Shop Manager peut gérer les utilisateurs de sa boutique
         if user.is_shop_manager:
-            # Peut gérer que les employés de sa boutique
-            return (obj.shop == user.shop and
-                    obj.role == 'EMPLOYEE')
+            if view.action == 'destroy' and obj.role != 'EMPLOYEE':
+                return False
+            return manager_can_manage(user, obj)
 
         # Un utilisateur peut se gérer lui-même (pour update profile)
         if view.action in ['update', 'partial_update']:

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.accounts.models import User
+from apps.accounts.permissions import MANAGER_MANAGEABLE_ROLES
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
@@ -125,6 +126,14 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         shop = attrs.get('shop', self.instance.shop if self.instance else None)
         if role in ('SHOP_MANAGER', 'EMPLOYEE', 'MAGASINIER', 'LIVREUR') and not shop:
             raise serializers.ValidationError({'shop': "Une boutique est requise pour ce rôle."})
+
+        actor = self.context['request'].user
+        if actor.is_shop_manager:
+            if role not in MANAGER_MANAGEABLE_ROLES:
+                raise serializers.ValidationError({'role': "Un manager ne peut attribuer que les rôles employé, livreur ou magasinier."})
+            # Une boutique inchangée reste acceptée : l'employé peut être affecté ailleurs temporairement.
+            if shop != self.instance.shop and not actor.managed_shops.filter(id=shop.id).exists():
+                raise serializers.ValidationError({'shop': "Vous ne gérez pas cette boutique."})
         return attrs
 
     def update(self, instance, validated_data):

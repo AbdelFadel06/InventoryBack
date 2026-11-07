@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
@@ -17,7 +18,9 @@ from apps.accounts.serializers import (
 from apps.accounts.permissions import (
     IsSuperAdmin,
     IsShopManagerOrSuperAdmin,
-    CanManageUser
+    CanManageUser,
+    MANAGER_MANAGEABLE_ROLES,
+    manager_can_manage,
 )
 from apps.shops.models import Shop
 
@@ -66,6 +69,25 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return queryset.filter(id=user.id)
 
+    def _manager_target_shop(self, manager, requested_shop):
+        """Boutique du nouveau compte : celle demandée si le manager la gère, sinon sa boutique active."""
+        if requested_shop is not None:
+            if not manager.managed_shops.filter(id=requested_shop.id).exists():
+                raise ValidationError({'shop': "Vous ne gérez pas cette boutique."})
+            return requested_shop
+
+        home_shop = None
+        active_shop_id = self.request.headers.get('X-Active-Shop')
+        if active_shop_id:
+            try:
+                home_shop = manager.managed_shops.get(id=int(active_shop_id))
+            except (ValueError, Shop.DoesNotExist):
+                pass
+        home_shop = home_shop or manager.managed_shops.first()
+        if not home_shop:
+            raise ValidationError({'shop': "Vous ne gérez aucune boutique."})
+        return home_shop
+
     def perform_create(self, serializer):
         from apps.accounts.views.auth import send_activation_email
 
@@ -73,17 +95,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if user.is_shop_manager:
             role = serializer.validated_data.get('role', 'EMPLOYEE')
-            if role not in ('EMPLOYEE', 'LIVREUR', 'MAGASINIER'):
-                role = 'EMPLOYEE'
-            home_shop = None
-            active_shop_id = self.request.headers.get('X-Active-Shop')
-            if active_shop_id:
-                try:
-                    home_shop = user.managed_shops.get(id=int(active_shop_id))
-                except (ValueError, Shop.DoesNotExist):
-                    pass
-            if not home_shop:
-                home_shop = user.managed_shops.first()
+            if role not in MANAGER_MANAGEABLE_ROLES:
+                raise ValidationError({'role': "Un manager ne peut créer que des employés, livreurs ou magasiniers."})
+            home_shop = self._manager_target_shop(user, serializer.validated_data.get('shop'))
             created = serializer.save(role=role, shop=home_shop, home_shop=home_shop)
         else:
             created = serializer.save()
@@ -223,7 +237,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         # Vérifier les permissions
         if not self.request.user.is_super_admin:
-            if user_to_toggle.shop != self.request.user.shop:
+            if not manager_can_manage(self.request.user, user_to_toggle):
                 return Response(
                     {'error': 'Vous ne pouvez pas modifier cet utilisateur.'},
                     status=status.HTTP_403_FORBIDDEN
