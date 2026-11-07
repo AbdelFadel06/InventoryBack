@@ -42,6 +42,15 @@ class InventoryViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet)
     permission_classes = [IsAuthenticated, CanManageInventories]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['shop', 'status', 'inventory_date']
+    # Droit de la grille par action, sinon par méthode (l'aiguillage choisit ancienne règle ou grille).
+    permission_codes = {
+        'get': 'inventories.view',
+        'create': 'inventories.create', 'update': 'inventories.create', 'partial_update': 'inventories.create',
+        'add_products': 'inventories.create', 'start': 'inventories.create',
+        'count_product': 'inventories.count', 'count_multiple': 'inventories.count',
+        'complete': 'inventories.validate', 'validate': 'inventories.validate',
+        'cancel': 'inventories.cancel', 'destroy': 'inventories.cancel',
+    }
     summary_group_by = 'status'
     search_fields = ['reference', 'notes']
     ordering_fields = ['inventory_date', 'created_at']

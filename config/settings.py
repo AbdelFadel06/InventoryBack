@@ -244,3 +244,7 @@ FRONTEND_URL        = config('FRONTEND_URL', default='http://localhost:5173')
 VAPID_PUBLIC_KEY  = config('VAPID_PUBLIC_KEY', default='')
 VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
 VAPID_SUBJECT     = config('VAPID_SUBJECT', default='https://shopm.abdelsaliou.dev')
+
+# Permissions : modules où la grille décide (sinon anciennes règles). Ex. « boutiques,produits » ou « all ».
+# Marche arrière immédiate : vider la valeur puis redémarrer gunicorn.
+PERMISSIONS_ENFORCE = [m.strip() for m in config('PERMISSIONS_ENFORCE', default='').split(',') if m.strip()]

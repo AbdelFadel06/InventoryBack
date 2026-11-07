@@ -17,11 +17,17 @@ from apps.shops.serializers import (
 )
 from apps.shops.permissions import IsSuperAdminOrReadOnly, CanManageShop
 from apps.accounts.permissions import IsSuperAdmin, MANAGER_MANAGEABLE_ROLES
+from apps.access.services import gate
 
 
 class ShopViewSet(viewsets.ModelViewSet):
     queryset = Shop.objects.prefetch_related('managers').select_related('created_by').all()
     permission_classes = [IsAuthenticated, IsSuperAdminOrReadOnly]
+    # Droit de la grille pour chaque action (l'aiguillage choisit ancienne règle ou grille).
+    permission_codes = {
+        'list': 'shops.view', 'retrieve': 'shops.view', 'create': 'shops.create',
+        'update': 'shops.update', 'partial_update': 'shops.update', 'destroy': 'shops.delete',
+    }
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -106,7 +112,7 @@ class ShopViewSet(viewsets.ModelViewSet):
         Body: { "manager_id": 5, "action": "add" | "remove" }
         """
         shop = self.get_object()
-        if not request.user.is_super_admin:
+        if not gate(request.user, 'shops.assign_manager', request.user.is_super_admin):
             return Response({'error': 'Réservé au Super Admin.'}, status=status.HTTP_403_FORBIDDEN)
 
         manager_id = request.data.get('manager_id')
@@ -145,7 +151,9 @@ class ShopViewSet(viewsets.ModelViewSet):
         """
         shop = self.get_object()
         is_manager_of_shop = shop.managers.filter(id=request.user.id).exists()
-        if not request.user.is_super_admin and not is_manager_of_shop:
+        user = request.user
+        role_ok = gate(user, 'shops.assign_staff', user.is_super_admin or user.is_shop_manager)
+        if not role_ok or not (user.is_super_admin or is_manager_of_shop):
             return Response({'error': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = ShopAssignEmployeesSerializer(data=request.data)
@@ -208,7 +216,7 @@ class ShopViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def toggle_active(self, request, pk=None):
         """Activer/Désactiver une boutique."""
-        if not request.user.is_super_admin:
+        if not gate(request.user, 'shops.update', request.user.is_super_admin):
             return Response({'error': 'Réservé au Super Admin.'}, status=status.HTTP_403_FORBIDDEN)
         shop = self.get_object()
         shop.is_active = not shop.is_active

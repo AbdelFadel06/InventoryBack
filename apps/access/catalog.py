@@ -72,7 +72,7 @@ PERMISSIONS = [
     # ── Stock ─────────────────────────────────────────────────────
     _p('stock.view',             'Stock', "Voir le stock",                     VIEW,    ALL),
     _p('stock.adjust_warehouse', 'Stock', "Ajuster le stock du magasin",       UPDATE,  STOCK_WRITERS),
-    _p('stock.adjust_boutique',  'Stock', "Ajuster le stock de la boutique",   SPECIAL, ADMIN_MANAGER),
+    _p('stock.adjust_boutique',  'Stock', "Toucher au stock de la boutique (pas seulement le magasin)", SPECIAL, ADMIN_MANAGER),
     _p('stock.movements',        'Stock', "Entrées et sorties de stock",       CREATE,  STOCK_WRITERS),
     _p('transfers.create',       'Stock', "Créer et envoyer un transfert",     SPECIAL, STOCK_WRITERS),
 
@@ -102,11 +102,10 @@ PERMISSIONS = [
     _p('sessions.manage', 'Caisse', "Ouvrir, clôturer ou supprimer une session", SPECIAL, ADMIN_MANAGER),
     _p('expenses.view',   'Caisse', "Voir les dépenses",                         VIEW,    BOUTIQUE_FIGURES),
     _p('expenses.create', 'Caisse', "Saisir une dépense",                        CREATE,  REGISTER),
-    _p('expenses.delete', 'Caisse', "Supprimer une dépense",                     DELETE,  ADMIN_MANAGER),
+    _p('expenses.delete', 'Caisse', "Modifier ou supprimer une dépense",         DELETE,  ADMIN_MANAGER),
 
-    # ── Notifications et administration ───────────────────────────
-    _p('notifications.receive', 'Administration', "Recevoir les notifications",   SPECIAL, {MANAGER}),
-    _p(MANAGE_PERMISSIONS,      'Administration', "Gérer les permissions",        SPECIAL, ADMIN_ONLY),
+    # ── Administration ────────────────────────────────────────────
+    _p(MANAGE_PERMISSIONS, 'Administration', "Gérer les permissions", SPECIAL, ADMIN_ONLY),
 ]
 
 BY_CODE = {p.code: p for p in PERMISSIONS}

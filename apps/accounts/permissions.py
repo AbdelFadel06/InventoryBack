@@ -1,5 +1,7 @@
 from rest_framework import permissions
 
+from apps.access.services import gate, gate_view
+
 # Seuls rôles qu'un manager peut créer ou gérer. Les managers sont créés par le Super Admin.
 MANAGER_MANAGEABLE_ROLES = ('EMPLOYEE', 'LIVREUR', 'MAGASINIER')
 
@@ -16,7 +18,8 @@ class IsSuperAdmin(permissions.BasePermission):
     Permission pour vérifier si l'utilisateur est Super Admin
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.is_super_admin
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(request, view, user.is_super_admin)
 
 
 class IsShopManager(permissions.BasePermission):
@@ -24,7 +27,8 @@ class IsShopManager(permissions.BasePermission):
     Permission pour vérifier si l'utilisateur est Manager de boutique
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.is_shop_manager
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(request, view, user.is_shop_manager)
 
 
 class IsShopManagerOrSuperAdmin(permissions.BasePermission):
@@ -32,8 +36,9 @@ class IsShopManagerOrSuperAdmin(permissions.BasePermission):
     Permission pour Manager ou Super Admin
     """
     def has_permission(self, request, view):
-        return (request.user and request.user.is_authenticated and
-                (request.user.is_super_admin or request.user.is_shop_manager))
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(
+            request, view, user.is_super_admin or user.is_shop_manager)
 
 
 class CanManageUser(permissions.BasePermission):
@@ -45,17 +50,18 @@ class CanManageUser(permissions.BasePermission):
     """
     def has_object_permission(self, request, view, obj):
         user = request.user
+        code = 'users.delete' if view.action == 'destroy' else 'users.update'
 
         # Super Admin peut tout faire
         if user.is_super_admin:
-            return True
+            return gate(user, code, True)
 
         if user.is_shop_manager:
             if view.action == 'destroy' and obj.role != 'EMPLOYEE':
                 return False
-            return manager_can_manage(user, obj)
+            return manager_can_manage(user, obj) and gate(user, code, True)
 
-        # Un utilisateur peut se gérer lui-même (pour update profile)
+        # Un utilisateur peut se gérer lui-même (pour update profile) : contexte, hors grille.
         if view.action in ['update', 'partial_update']:
             return obj == user
 

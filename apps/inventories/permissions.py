@@ -1,5 +1,7 @@
 from rest_framework import permissions
 
+from apps.access.services import gate, gate_view, view_code
+
 
 class CanManageInventories(permissions.BasePermission):
     """
@@ -10,32 +12,39 @@ class CanManageInventories(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+
         # Tout le monde authentifié peut lire
         if request.method in permissions.SAFE_METHODS:
-            return request.user and request.user.is_authenticated
+            return gate_view(request, view, True)
 
         # Création: Super Admin ou Shop Manager
         if view.action == 'create':
-            return (request.user and request.user.is_authenticated and
-                    (request.user.is_super_admin or request.user.is_shop_manager))
+            return gate_view(request, view, user.is_super_admin or user.is_shop_manager)
 
-        # Autres actions nécessitent authentification
-        return request.user and request.user.is_authenticated
+        # Autres actions : décidées sur l'inventaire lui-même (has_object_permission)
+        return True
 
     def has_object_permission(self, request, view, obj):
         user = request.user
+        code = view_code(view, request)
+
+        def role_ok(legacy):
+            return gate(user, code, legacy) if code else legacy
 
         if user.is_super_admin:
-            return True
+            return role_ok(True)
 
         if user.is_shop_manager:
-            return user.managed_shops.filter(id=obj.shop_id).exists()
+            return user.managed_shops.filter(id=obj.shop_id).exists() and role_ok(True)
 
         # Autres rôles : lecture + comptage sur leur boutique. Annuler, supprimer
         # ou faire avancer un inventaire est réservé au manager et au Super Admin.
         if view.action in ['count_product', 'count_multiple'] or request.method in permissions.SAFE_METHODS:
-            return obj.shop == user.shop
-        return False
+            return obj.shop == user.shop and role_ok(True)
+        return role_ok(False) and obj.shop == user.shop
 
 
 class CanCountInventory(permissions.BasePermission):
@@ -45,7 +54,8 @@ class CanCountInventory(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(request, view, True)
 
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -67,8 +77,9 @@ class CanValidateInventory(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return (request.user and request.user.is_authenticated and
-                (request.user.is_super_admin or request.user.is_shop_manager))
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(
+            request, view, user.is_super_admin or user.is_shop_manager)
 
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -79,4 +90,6 @@ class CanValidateInventory(permissions.BasePermission):
         if user.is_shop_manager:
             return user.managed_shops.filter(id=obj.shop_id).exists()
 
-        return False
+        # Autre rôle à qui la grille donne ce droit : inventaires de sa boutique seulement.
+        code = view_code(view, request)
+        return bool(code) and gate(user, code, False) and obj.shop == user.shop

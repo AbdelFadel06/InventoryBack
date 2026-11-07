@@ -1,5 +1,6 @@
 from rest_framework import permissions
 
+from apps.access.services import gate_view
 from apps.sales.models.sale import CashierSession
 
 
@@ -14,22 +15,25 @@ def is_active_cashier(user, shop):
 class IsManagerOrAdmin(permissions.BasePermission):
     """Uniquement Manager et Super Admin"""
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+        user = request.user
+        if not user or not user.is_authenticated:
             return False
-        return request.user.is_super_admin or request.user.is_shop_manager
+        return gate_view(request, view, user.is_super_admin or user.is_shop_manager)
 
 
 class NoWarehouseAccess(permissions.BasePermission):
     """Le magasinier n'a pas accès à la caisse, même en lecture."""
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and not request.user.is_magasinier)
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(request, view, not user.is_magasinier)
 
 
 class CanReadBoutiqueFigures(permissions.BasePermission):
     """Rapports, sessions et dépenses : ni le magasinier, ni le livreur."""
     def has_permission(self, request, view):
         user = request.user
-        return bool(user and user.is_authenticated and not user.is_magasinier and user.role != 'LIVREUR')
+        return bool(user and user.is_authenticated) and gate_view(
+            request, view, not user.is_magasinier and user.role != 'LIVREUR')
 
 
 class IsRegisterOperator(permissions.BasePermission):
@@ -38,7 +42,12 @@ class IsRegisterOperator(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        return user.is_shop_manager or is_active_cashier(user, view.get_active_shop(request))
+        # Rôle (aiguillage) ET contexte : hors manager/Super Admin, il faut être le caissier du jour.
+        role_ok = gate_view(request, view, user.is_shop_manager or user.role == 'EMPLOYEE')
+        return role_ok and (
+            user.is_super_admin or user.is_shop_manager
+            or is_active_cashier(user, view.get_active_shop(request))
+        )
 
 
 class CanModifyDelivery(permissions.BasePermission):
@@ -50,7 +59,8 @@ class CanModifyDelivery(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        return (
+        role_ok = gate_view(request, view, user.is_super_admin or user.is_shop_manager or user.role == 'EMPLOYEE')
+        return role_ok and (
             user.is_super_admin
             or user.is_shop_manager
             or is_active_cashier(user, view.get_active_shop(request))
@@ -65,4 +75,5 @@ class CanModifyDelivery(permissions.BasePermission):
 
 class IsLivreur(permissions.BasePermission):
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == 'LIVREUR')
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(request, view, user.role == 'LIVREUR')

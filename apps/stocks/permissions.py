@@ -1,5 +1,7 @@
 from rest_framework import permissions
 
+from apps.access.services import gate_view
+
 
 def manages_shop(user, shop):
     """Boutique courante du manager, ou l'une de celles qu'il gère (multi-boutiques)."""
@@ -13,7 +15,7 @@ class CanWriteStock(permissions.BasePermission):
         user = request.user
         if not (user and user.is_authenticated):
             return False
-        return user.is_super_admin or user.is_shop_manager or user.is_magasinier
+        return gate_view(request, view, user.is_super_admin or user.is_shop_manager or user.is_magasinier)
 
 
 class CanManageStock(permissions.BasePermission):
@@ -25,11 +27,12 @@ class CanManageStock(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        if not (request.user and request.user.is_authenticated):
+        user = request.user
+        if not (user and user.is_authenticated):
             return False
         if request.method in permissions.SAFE_METHODS:
-            return True
-        return request.user.is_super_admin or request.user.is_shop_manager or request.user.is_magasinier
+            return gate_view(request, view, True)
+        return gate_view(request, view, user.is_super_admin or user.is_shop_manager or user.is_magasinier)
 
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -58,7 +61,8 @@ class CanCreateStockMovement(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated
+        user = request.user
+        return bool(user and user.is_authenticated) and gate_view(request, view, True)
 
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -78,11 +82,12 @@ class CanManageTransfers(permissions.BasePermission):
     """
 
     def has_permission(self, request, view):
-        if not (request.user and request.user.is_authenticated):
+        user = request.user
+        if not (user and user.is_authenticated):
             return False
         if request.method in permissions.SAFE_METHODS:
-            return True
-        return request.user.is_super_admin or request.user.is_shop_manager or request.user.is_magasinier
+            return gate_view(request, view, True)
+        return gate_view(request, view, user.is_super_admin or user.is_shop_manager or user.is_magasinier)
 
     def has_object_permission(self, request, view, obj):
         user = request.user

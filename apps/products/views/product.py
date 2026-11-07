@@ -28,6 +28,11 @@ class CategoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, CanManageCategories]
+    # Droit de la grille par action ou par méthode (l'aiguillage choisit ancienne règle ou grille).
+    permission_codes = {
+        'get': 'products.view', 'post': 'categories.manage', 'put': 'categories.manage',
+        'patch': 'categories.manage', 'delete': 'categories.manage',
+    }
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['name', 'created_at']
@@ -95,6 +100,16 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     """
     queryset = Product.objects.select_related('category', 'shop', 'created_by').all()
     permission_classes = [IsAuthenticated, CanManageProducts]
+    # Droit de la grille par action, sinon par méthode (toutes les lectures : products.view).
+    permission_codes = {
+        'get': 'products.view',
+        'create': 'products.create',
+        'update': 'products.update', 'partial_update': 'products.update', 'toggle_active': 'products.update',
+        'add_image': 'products.update', 'remove_image': 'products.update',
+        'generate_barcode': 'products.update', 'generate_all_barcodes': 'products.update',
+        'destroy': 'products.delete',
+        'bulk_update_prices': 'products.bulk_prices',
+    }
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['category', 'shop', 'is_active', 'unit']
     search_fields = ['name', 'sku', 'barcode', 'description']

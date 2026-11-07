@@ -23,6 +23,8 @@ from apps.accounts.permissions import (
     manager_can_manage,
 )
 from apps.shops.models import Shop
+from apps.access.permissions import GridGate
+from apps.access.services import gate
 from config.list_summary import ListSummaryMixin
 
 
@@ -33,6 +35,11 @@ class UserViewSet(ListSummaryMixin, viewsets.ModelViewSet):
     filter_backends  = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['role', 'is_active', 'shop']
     summary_group_by = 'role'
+    # Droit de la grille pour chaque action (l'aiguillage choisit ancienne règle ou grille).
+    permission_codes = {
+        'list': 'users.view', 'retrieve': 'users.view', 'create': 'users.create',
+        'toggle_active': 'users.toggle_active',
+    }
     search_fields    = ['email', 'first_name', 'last_name']
     ordering_fields  = ['email', 'first_name', 'last_name', 'created_at']
     ordering         = ['last_name', 'first_name']
@@ -55,6 +62,8 @@ class UserViewSet(ListSummaryMixin, viewsets.ModelViewSet):
             return [IsShopManagerOrSuperAdmin()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), CanManageUser()]
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated(), GridGate()]
         return [IsAuthenticated()]
 
     def build_summary(self, queryset):
@@ -239,8 +248,11 @@ class UserViewSet(ListSummaryMixin, viewsets.ModelViewSet):
         POST /api/users/{id}/toggle_active/
         """
         user_to_toggle = self.get_object()
+        me = self.request.user
+        if not gate(me, 'users.toggle_active', me.is_super_admin or me.is_shop_manager):
+            return Response({'error': 'Vous ne pouvez pas modifier cet utilisateur.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Vérifier les permissions
+        # Vérifier les permissions (périmètre : comptes de ses boutiques)
         if not self.request.user.is_super_admin:
             if not manager_can_manage(self.request.user, user_to_toggle):
                 return Response(

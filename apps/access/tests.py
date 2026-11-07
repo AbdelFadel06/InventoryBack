@@ -113,3 +113,36 @@ class PermissionApiTests(PermissionFixtures):
         body = self.call(self.admin, 'get', f'/api/access/users/{self.employee.id}/').json()
         self.assertTrue(body['effective']['sales.cancel'])
         self.assertEqual(body['overrides'], {'sales.cancel': True})
+
+
+class SwitchTests(PermissionFixtures):
+    """Un interrupteur par module : allumer l'un ne change rien aux autres."""
+
+    def setUp(self):
+        super().setUp()
+        RolePermission.objects.filter(role='SHOP_MANAGER', code__in=['products.create', 'sales.cancel']).update(allowed=False)
+
+    def create_product(self):
+        return self.call(self.manager, 'post', '/api/products/', {
+            'name': 'Nouveau', 'sku': 'SKU-NEW', 'category': self.category.id, 'selling_price': 100,
+        })
+
+    def test_switches_off_keep_the_old_rules(self):
+        from django.test import override_settings
+        with override_settings(PERMISSIONS_ENFORCE=[]):
+            self.assertEqual(self.create_product().status_code, 201)
+
+    def test_only_the_switched_module_follows_the_grid(self):
+        from django.test import override_settings
+        with override_settings(PERMISSIONS_ENFORCE=['produits']):
+            self.assertEqual(self.create_product().status_code, 403)
+            # Ventes : interrupteur éteint, l'ancienne règle s'applique encore (motif manquant → 400, pas 403).
+            response = self.call(self.manager, 'post', f'/api/sales/{self.sale.id}/cancel/', {})
+            self.assertNotEqual(response.status_code, 403)
+
+    def test_own_profile_stays_editable_without_any_right(self):
+        from django.test import override_settings
+        RolePermission.objects.exclude(code=MANAGE_PERMISSIONS).update(allowed=False)
+        with override_settings(PERMISSIONS_ENFORCE=['all']):
+            response = self.call(self.employee, 'patch', f'/api/users/{self.employee.id}/', {'first_name': 'Awa'})
+        self.assertEqual(response.status_code, 200, response.content)

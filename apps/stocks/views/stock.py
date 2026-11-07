@@ -25,6 +25,7 @@ from apps.stocks.permissions import (
     CanWriteStock,
 )
 from apps.accounts.permissions import IsSuperAdmin
+from apps.access.services import gate
 from apps.shops.mixins import ActiveShopMixin
 from config.list_summary import ListSummaryMixin
 
@@ -39,6 +40,12 @@ STOCK_STATUS_FILTERS = {
 
 
 class StockViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
+    # Droit de la grille par action, sinon par méthode (l'aiguillage choisit ancienne règle ou grille).
+    permission_codes = {
+        'get': 'stock.view', 'adjust': 'stock.adjust_warehouse', 'create': 'stock.adjust_warehouse',
+        'update': 'stock.adjust_warehouse', 'partial_update': 'stock.adjust_warehouse',
+        'destroy': 'stock.adjust_warehouse',
+    }
     queryset = Stock.objects.select_related('product', 'shop', 'updated_by').all()
     permission_classes = [IsAuthenticated, CanManageStock]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -104,9 +111,10 @@ class StockViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
             active_shop = self.get_active_shop(request)
             if active_shop and shop != active_shop:
                 return Response({'error': 'Vous ne pouvez pas ajuster le stock de cette boutique.'}, status=status.HTTP_403_FORBIDDEN)
-            # Magasinier ne peut ajuster que le magasin
-            if request.user.is_magasinier and location != 'MAGASIN':
-                return Response({'error': 'Vous ne pouvez ajuster que le stock magasin.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Stock de la boutique (pas le magasin) : droit à part ; par défaut, pas le magasinier.
+        if location != 'MAGASIN' and not gate(request.user, 'stock.adjust_boutique', not request.user.is_magasinier):
+            return Response({'error': 'Vous ne pouvez ajuster que le stock magasin.'}, status=status.HTTP_403_FORBIDDEN)
 
         stock, _ = Stock.objects.get_or_create(product=product, shop=shop, location=location, defaults={'quantity': 0})
         old_quantity = stock.quantity
@@ -144,6 +152,7 @@ class StockViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
 
 class StockMovementViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
     summary_group_by = 'movement_type'
+    permission_codes = {'get': 'stock.view', 'add_stock': 'stock.movements', 'remove_stock': 'stock.movements'}
     queryset = StockMovement.objects.select_related('product', 'shop', 'related_shop', 'created_by').all()
     serializer_class = StockMovementSerializer
     permission_classes = [IsAuthenticated, CanCreateStockMovement]
@@ -186,8 +195,10 @@ class StockMovementViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ReadOnlyM
             active_shop = self.get_active_shop(request)
             if active_shop and active_shop.id != shop_id:
                 return Response({'error': 'Vous ne pouvez pas ajouter du stock à cette boutique.'}, status=status.HTTP_403_FORBIDDEN)
-            if request.user.is_magasinier and location != 'MAGASIN':
-                return Response({'error': 'Le magasinier ne peut enregistrer des entrées que dans le magasin.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Stock de la boutique (pas le magasin) : droit à part ; par défaut, pas le magasinier.
+        if location != 'MAGASIN' and not gate(request.user, 'stock.adjust_boutique', not request.user.is_magasinier):
+            return Response({'error': 'Le magasinier ne peut enregistrer des entrées que dans le magasin.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             movement = serializer.save()
@@ -216,8 +227,10 @@ class StockMovementViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ReadOnlyM
             active_shop = self.get_active_shop(request)
             if active_shop and active_shop.id != shop_id:
                 return Response({'error': 'Vous ne pouvez pas retirer du stock de cette boutique.'}, status=status.HTTP_403_FORBIDDEN)
-            if request.user.is_magasinier and location != 'MAGASIN':
-                return Response({'error': 'Le magasinier ne peut retirer que du stock magasin.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Stock de la boutique (pas le magasin) : droit à part ; par défaut, pas le magasinier.
+        if location != 'MAGASIN' and not gate(request.user, 'stock.adjust_boutique', not request.user.is_magasinier):
+            return Response({'error': 'Le magasinier ne peut retirer que du stock magasin.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             movement = serializer.save()
@@ -228,6 +241,12 @@ class StockMovementViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ReadOnlyM
 
 class StockTransferViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
     summary_group_by = 'status'
+    # Les règles du circuit magasin → boutique (qui envoie, qui réceptionne) restent dans les actions.
+    permission_codes = {
+        'get': 'stock.view', 'create': 'transfers.create', 'update': 'transfers.create',
+        'partial_update': 'transfers.create', 'destroy': 'transfers.create',
+        'send': 'transfers.create', 'receive': 'transfers.create', 'cancel': 'transfers.create',
+    }
     queryset = StockTransfer.objects.select_related(
         'from_shop', 'to_shop', 'product', 'created_by', 'received_by'
     ).all()

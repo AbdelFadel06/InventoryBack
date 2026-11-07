@@ -1,0 +1,1154 @@
+{
+ "DELETE accounts:user-detail": {
+  "admin": 204,
+  "anonymous": 401,
+  "employee": 404,
+  "livreur": 404,
+  "magasinier": 404,
+  "manager": 204
+ },
+ "DELETE inventories:inventory-detail": {
+  "admin": 204,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 204
+ },
+ "DELETE products:category-detail": {
+  "admin": 204,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 204
+ },
+ "DELETE products:product-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "DELETE products:product-remove-image": {
+  "admin": 404,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 404
+ },
+ "DELETE sales:cashier-session-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "DELETE sales:expense-detail": {
+  "admin": 204,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 204
+ },
+ "DELETE sales:sale-detail": {
+  "admin": 405,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 405
+ },
+ "DELETE shops:shop-detail": {
+  "admin": 204,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "DELETE stocks:stock-detail": {
+  "admin": 204,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 204,
+  "manager": 204
+ },
+ "DELETE stocks:stock-transfer-detail": {
+  "admin": 204,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 204,
+  "manager": 204
+ },
+ "GET access-catalog": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "GET access-roles": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "GET access-user": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "GET accounts:user-counts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET accounts:user-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 404,
+  "livreur": 404,
+  "magasinier": 404,
+  "manager": 200
+ },
+ "GET accounts:user-employees": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET accounts:user-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET accounts:user-livreurs": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET accounts:user-managers": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET accounts:user-me": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET inventories:inventory-counts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET inventories:inventory-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET inventories:inventory-discrepancies": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET inventories:inventory-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET inventories:inventory-statistics": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:category-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:category-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:category-products": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-by-barcode": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "GET products:product-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-find-duplicates": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-low-stock": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-needs-reorder": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-out-of-stock": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-statistics": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET products:product-stock-by-shop": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET push-key": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET sales:cashier-session-active": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:cashier-session-counts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:cashier-session-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:cashier-session-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:expense-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:expense-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-counts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-daily-report": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-issue-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-issue-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-livreur-point": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-livreur-stats": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-monthly-summary": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET sales:sale-period-report": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "GET shops:shop-assignment-history": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "GET shops:shop-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET shops:shop-employees": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET shops:shop-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET shops:shop-staff": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET shops:shop-statistics": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "GET stocks:stock-alerts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-counts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-movement-counts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-movement-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-movement-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-summary": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-transfer-counts": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-transfer-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "GET stocks:stock-transfer-list": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "PATCH accounts:user-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 404,
+  "livreur": 404,
+  "magasinier": 404,
+  "manager": 200
+ },
+ "PATCH accounts:user-update-profile": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "PATCH inventories:inventory-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "PATCH products:category-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "PATCH products:product-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "PATCH sales:cashier-session-detail": {
+  "admin": 500,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 500
+ },
+ "PATCH sales:expense-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "PATCH sales:sale-detail": {
+  "admin": 405,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 405
+ },
+ "PATCH shops:shop-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "PATCH stocks:stock-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "PATCH stocks:stock-transfer-detail": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "POST accounts:password-reset": {
+  "admin": 400,
+  "anonymous": 400,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST accounts:password-reset-confirm": {
+  "admin": 400,
+  "anonymous": 400,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST accounts:user-change-password": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST accounts:user-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST accounts:user-toggle-active": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 404,
+  "livreur": 404,
+  "magasinier": 404,
+  "manager": 200
+ },
+ "POST inventories:inventory-add-products": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST inventories:inventory-cancel": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST inventories:inventory-complete": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST inventories:inventory-count-multiple": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST inventories:inventory-count-product": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST inventories:inventory-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST inventories:inventory-start": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST inventories:inventory-validate": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST products:category-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST products:product-add-image": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST products:product-bulk-update-prices": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "POST products:product-generate-all-barcodes": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST products:product-generate-barcode": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST products:product-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST products:product-toggle-active": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST push-subscribe": {
+  "admin": 403,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST push-test": {
+  "admin": 403,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST push-unsubscribe": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 200,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "POST sales:cashier-session-close": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST sales:cashier-session-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:expense-list": {
+  "admin": 403,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-cancel": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-correct": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-issue-resolve": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-list": {
+  "admin": 403,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-mark-delivered": {
+  "admin": 403,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 200,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "POST sales:sale-mark-livreur-paid": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST sales:sale-mark-livreur-paid-bulk": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-modify-items": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-report-issue": {
+  "admin": 403,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST sales:sale-validate-payment": {
+  "admin": 403,
+  "anonymous": 401,
+  "employee": 200,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 200
+ },
+ "POST shops:shop-assign-employees": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "POST shops:shop-assign-manager": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "POST shops:shop-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "POST shops:shop-toggle-active": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "POST stocks:stock-adjust": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST stocks:stock-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST stocks:stock-movement-add-stock": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST stocks:stock-movement-remove-stock": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST stocks:stock-transfer-cancel": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "POST stocks:stock-transfer-list": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST stocks:stock-transfer-receive": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST stocks:stock-transfer-send": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 200,
+  "manager": 200
+ },
+ "POST token_obtain_pair": {
+  "admin": 400,
+  "anonymous": 400,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "POST token_refresh": {
+  "admin": 400,
+  "anonymous": 400,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "PUT accounts:user-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 404,
+  "livreur": 404,
+  "magasinier": 404,
+  "manager": 400
+ },
+ "PUT accounts:user-update-profile": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 400,
+  "livreur": 400,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "PUT inventories:inventory-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "PUT products:category-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "PUT products:product-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "PUT sales:cashier-session-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "PUT sales:expense-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 400
+ },
+ "PUT sales:sale-detail": {
+  "admin": 405,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 405
+ },
+ "PUT shops:shop-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "PUT stocks:stock-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ },
+ "PUT stocks:stock-transfer-detail": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 400,
+  "manager": 400
+ }
+}

@@ -25,6 +25,12 @@ from apps.shops.mixins import ActiveShopMixin
 
 
 class CashierSessionViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
+    # Droit de la grille par action (l'aiguillage choisit ancienne règle ou grille).
+    permission_codes = {
+        'list': 'sessions.view', 'retrieve': 'sessions.view', 'active': 'sessions.view',
+        'create': 'sessions.manage', 'update': 'sessions.manage', 'partial_update': 'sessions.manage',
+        'destroy': 'sessions.manage', 'close': 'sessions.manage',
+    }
     """Gestion des sessions de caisse — Manager/Admin uniquement"""
     queryset = CashierSession.objects.select_related(
         'shop', 'cashier', 'created_by'
@@ -135,6 +141,17 @@ class CashierSessionViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelVie
 
 
 class SaleViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
+    # Droit de la grille par action ; ce que chacun voit (boutique, livreur) reste dans get_queryset.
+    permission_codes = {
+        'list': 'sales.view', 'retrieve': 'sales.view', 'livreur_point': 'sales.view',
+        'livreur_stats': 'reports.view', 'daily_report': 'reports.view',
+        'period_report': 'reports.view', 'monthly_summary': 'reports.view',
+        'create': 'sales.create', 'report_issue': 'sales.report_issue',
+        'cancel': 'sales.cancel', 'correct': 'sales.correct',
+        'modify_items': 'deliveries.modify', 'mark_delivered': 'deliveries.mark_delivered',
+        'validate_payment': 'deliveries.validate_payment',
+        'mark_livreur_paid': 'deliveries.pay_livreur', 'mark_livreur_paid_bulk': 'deliveries.pay_livreur',
+    }
     queryset = Sale.objects.select_related(
         'shop', 'cashier', 'livreur', 'session'
     ).prefetch_related('items__product').all()
@@ -863,6 +880,10 @@ class SaleViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
 
 
 class ExpenseViewSet(ActiveShopMixin, viewsets.ModelViewSet):
+    permission_codes = {
+        'list': 'expenses.view', 'retrieve': 'expenses.view', 'create': 'expenses.create',
+        'update': 'expenses.delete', 'partial_update': 'expenses.delete', 'destroy': 'expenses.delete',
+    }
     queryset = Expense.objects.select_related('session', 'shop', 'created_by').all()
     permission_classes = [IsAuthenticated]
     serializer_class   = ExpenseSerializer
