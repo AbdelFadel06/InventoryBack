@@ -13,7 +13,7 @@ from apps.shops.mixins import ActiveShopMixin
 
 class SaleIssueViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
     """Signalements à traiter par le manager, au point du soir."""
-    queryset = SaleIssue.objects.select_related('sale', 'reported_by', 'resolved_by').all()
+    queryset = SaleIssue.objects.select_related('sale__shop', 'reported_by', 'resolved_by').all()
     serializer_class = SaleIssueSerializer
     permission_classes = [IsAuthenticated, IsManagerOrAdmin]
     filter_backends = [DjangoFilterBackend]
@@ -26,6 +26,9 @@ class SaleIssueViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         if user.is_super_admin:
             return queryset
+        # ?scope=all : la cloche du manager couvre toutes ses boutiques, pas seulement l'active.
+        if self.request.query_params.get('scope') == 'all':
+            return queryset.filter(sale__shop__in=user.managed_shops.all())
         active_shop = self.get_active_shop(self.request)
         if active_shop:
             return queryset.filter(sale__shop=active_shop)
