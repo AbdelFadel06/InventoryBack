@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -37,6 +36,10 @@ ALL = {ADMIN, MANAGER, EMPLOYEE, LIVREUR, MAGASINIER}
 ADMIN_ONLY = {ADMIN}
 ADMIN_MANAGER = {ADMIN, MANAGER}
 STOCK_WRITERS = {ADMIN, MANAGER, MAGASINIER}
+NOT_WAREHOUSE = {ADMIN, MANAGER, EMPLOYEE, LIVREUR}
+BOUTIQUE_FIGURES = {ADMIN, MANAGER, EMPLOYEE}
+# Le manager et le caissier de la session active (ici `employee`) tiennent la caisse.
+REGISTER = {MANAGER, EMPLOYEE}
 
 
 def make_user(email, role, shop=None):
@@ -83,9 +86,17 @@ class PermissionFixtures(APITestCase):
         cls.stock = Stock.objects.create(
             product=cls.product, shop=cls.shop_a, location='MAGASIN', quantity=10,
         )
+        cls.boutique_stock = Stock.objects.create(
+            product=cls.product, shop=cls.shop_a, location='BOUTIQUE', quantity=10,
+        )
+        # L'employé `employee` est le caissier du jour, `target` est un employé ordinaire.
         cls.session = CashierSession.objects.create(
             shop=cls.shop_a, cashier=cls.employee, created_by=cls.manager,
             start_date=date.today(), end_date=date.today(),
+        )
+        cls.past_empty_session = CashierSession.objects.create(
+            shop=cls.shop_a, cashier=cls.employee, created_by=cls.manager,
+            start_date=date.today() - timedelta(days=5), end_date=date.today() - timedelta(days=5),
         )
         cls.sale = Sale.objects.create(
             shop=cls.shop_a, cashier=cls.employee, session=cls.session,
@@ -103,6 +114,15 @@ class PermissionFixtures(APITestCase):
         )
         cls.line = InventoryLine.objects.create(
             inventory=cls.inventory, product=cls.product, expected_quantity=10,
+        )
+        cls.counted_inventory = Inventory.objects.create(
+            reference='INV-COMPTE',
+            shop=cls.shop_a, inventory_date=date.today(), created_by=cls.manager,
+            status='in_progress',
+        )
+        InventoryLine.objects.create(
+            inventory=cls.counted_inventory, product=cls.product,
+            expected_quantity=10, counted_quantity=10,
         )
         cls.completed_inventory = Inventory.objects.create(
             reference='INV-TERMINE',
@@ -186,9 +206,9 @@ MATRIX = [
      lambda t: {'product': t.product.id, 'shop': t.shop_a.id, 'location': 'BOUTIQUE',
                 'new_quantity': 5, 'reason': 'test'}, ADMIN_MANAGER),
     ('movements_add_stock', 'post', lambda t: '/api/stock-movements/add_stock/',
-     lambda t: {'product': t.product.id, 'shop': t.shop_a.id, 'quantity': 1}, ALL),
+     lambda t: {'product': t.product.id, 'shop': t.shop_a.id, 'quantity': 1}, STOCK_WRITERS),
     ('movements_remove_stock', 'post', lambda t: '/api/stock-movements/remove_stock/',
-     lambda t: {'product': t.product.id, 'shop': t.shop_a.id, 'location': 'MAGASIN', 'quantity': 1}, ALL),
+     lambda t: {'product': t.product.id, 'shop': t.shop_a.id, 'location': 'MAGASIN', 'quantity': 1}, STOCK_WRITERS),
     ('transfers_create', 'post', lambda t: '/api/stock-transfers/', lambda t: {
         'transfer_type': 'warehouse', 'from_shop': t.shop_a.id, 'to_shop': t.shop_a.id,
         'product': t.product.id, 'quantity': 1,
@@ -203,33 +223,54 @@ MATRIX = [
     ('inventories_validate', 'post', lambda t: f'/api/inventories/{t.completed_inventory.id}/validate/',
      no_data, ADMIN_MANAGER),
     ('inventories_cancel', 'post', lambda t: f'/api/inventories/{t.inventory.id}/cancel/',
-     no_data, {ADMIN, MANAGER, LIVREUR, MAGASINIER}),
+     no_data, ADMIN_MANAGER),
+    ('inventories_delete', 'delete', lambda t: f'/api/inventories/{t.inventory.id}/',
+     no_data, ADMIN_MANAGER),
+    ('inventories_complete', 'post', lambda t: f'/api/inventories/{t.counted_inventory.id}/complete/',
+     no_data, ADMIN_MANAGER),
 
     # ── Ventes, caisse et dépenses ───────────────────────────────────
-    ('sales_list', 'get', lambda t: '/api/sales/?all=true', no_data, ALL),
-    ('sales_daily_report', 'get', lambda t: '/api/sales/daily_report/', no_data, ALL),
-    ('sales_cancel', 'post', lambda t: f'/api/sales/{t.sale.id}/cancel/', no_data, ALL),
-    ('sales_mark_delivered', 'post', lambda t: f'/api/sales/{t.sale.id}/mark_delivered/', no_data, ALL),
-    ('sales_validate_payment', 'post', lambda t: f'/api/sales/{t.sale.id}/validate_payment/', no_data, ALL),
-    ('sales_mark_livreur_paid', 'post', lambda t: f'/api/sales/{t.sale.id}/mark_livreur_paid/', no_data, ALL),
+    ('sales_list', 'get', lambda t: '/api/sales/?all=true', no_data, NOT_WAREHOUSE),
+    ('sales_daily_report', 'get', lambda t: '/api/sales/daily_report/', no_data, BOUTIQUE_FIGURES),
+    ('sales_period_report', 'get', lambda t: (
+        f'/api/sales/period_report/?date_from={date.today().isoformat()}&date_to={date.today().isoformat()}'
+    ), no_data, BOUTIQUE_FIGURES),
+    ('sales_monthly_summary', 'get', lambda t: (
+        f'/api/sales/monthly_summary/?year={date.today().year}&month={date.today().month}'
+    ), no_data, BOUTIQUE_FIGURES),
+    ('sales_livreur_stats', 'get', lambda t: '/api/sales/livreur_stats/', no_data, BOUTIQUE_FIGURES),
+    ('sales_livreur_point', 'get', lambda t: '/api/sales/livreur_point/', no_data, NOT_WAREHOUSE),
+    ('sales_create', 'post', lambda t: '/api/sales/', lambda t: {
+        'items': [{'product': t.product.id, 'quantity': 1}],
+    }, REGISTER),
+    ('sales_cancel', 'post', lambda t: f'/api/sales/{t.sale.id}/cancel/',
+     lambda t: {'reason': 'Erreur de saisie'}, ADMIN_MANAGER),
+    ('sales_modify_items', 'post', lambda t: f'/api/sales/{t.sale.id}/modify_items/',
+     lambda t: {'items': [{'product_id': t.product.id, 'quantity': 1}]}, {ADMIN, MANAGER, EMPLOYEE}),
+    ('sales_mark_delivered', 'post', lambda t: f'/api/sales/{t.sale.id}/mark_delivered/', no_data, {LIVREUR}),
+    ('sales_validate_payment', 'post', lambda t: f'/api/sales/{t.sale.id}/validate_payment/', no_data, REGISTER),
+    ('sales_mark_livreur_paid', 'post', lambda t: f'/api/sales/{t.sale.id}/mark_livreur_paid/',
+     no_data, ADMIN_MANAGER),
+    ('sessions_list', 'get', lambda t: '/api/cashier-sessions/', no_data, BOUTIQUE_FIGURES),
     ('sessions_create', 'post', lambda t: '/api/cashier-sessions/', lambda t: {
         'shop': t.shop_a.id, 'cashier': t.target.id, 'period_type': 'daily',
         'start_date': (date.today() + timedelta(days=30)).isoformat(),
         'end_date': (date.today() + timedelta(days=30)).isoformat(),
-    }, ALL),
-    ('sessions_close', 'post', lambda t: f'/api/cashier-sessions/{t.session.id}/close/', no_data, ALL),
-    ('sessions_delete', 'delete', lambda t: f'/api/cashier-sessions/{t.session.id}/', no_data, ALL),
+    }, ADMIN_MANAGER),
+    ('sessions_close', 'post', lambda t: f'/api/cashier-sessions/{t.session.id}/close/', no_data, ADMIN_MANAGER),
+    ('sessions_delete_empty', 'delete', lambda t: f'/api/cashier-sessions/{t.past_empty_session.id}/',
+     no_data, ADMIN_MANAGER),
+    ('expenses_list', 'get', lambda t: '/api/expenses/', no_data, BOUTIQUE_FIGURES),
     ('expenses_create', 'post', lambda t: '/api/expenses/', lambda t: {
         'session': t.session.id, 'label': 'Transport', 'amount': '500',
         'sale_date': date.today().isoformat(),
-    }, ALL),
-    ('expenses_delete', 'delete', lambda t: f'/api/expenses/{t.expense.id}/', no_data, ALL),
+    }, REGISTER),
+    ('expenses_delete', 'delete', lambda t: f'/api/expenses/{t.expense.id}/', no_data, ADMIN_MANAGER),
 ]
 
 # Ces cases plantent aujourd'hui (erreur 500) : voir KnownFlawTests.
 CRASHING_CELLS = {
     ('products_bulk_update_prices', ADMIN),
-    ('expenses_create', ADMIN),
 }
 
 
@@ -285,49 +326,10 @@ class KnownFlawTests(PermissionFixtures):
     échouera : il faudra alors inverser son attente.
     """
 
-    def test_FLAW_employee_can_cancel_a_sale_and_restock(self):
-        response = self.call(self.employee, 'post', f'/api/sales/{self.sale.id}/cancel/')
-        self.assertEqual(response.status_code, 200, response.content)
-        self.sale.refresh_from_db()
-        self.assertEqual(self.sale.status, 'cancelled')
-
-    def test_FLAW_magasinier_can_delete_a_cashier_session(self):
-        session_id = self.session.id
-        response = self.call(self.magasinier, 'delete', f'/api/cashier-sessions/{session_id}/')
-        self.assertEqual(response.status_code, 204, response.content)
-        self.assertFalse(CashierSession.objects.filter(id=session_id).exists())
-
-    def test_FLAW_employee_can_add_stock(self):
-        response = self.call(self.employee, 'post', '/api/stock-movements/add_stock/', {
-            'product': self.product.id, 'shop': self.shop_a.id, 'location': 'MAGASIN', 'quantity': 5,
-        })
-        self.assertEqual(response.status_code, 201, response.content)
-        self.stock.refresh_from_db()
-        self.assertEqual(self.stock.quantity, 15)
-
-    def test_FLAW_multi_shop_manager_gets_403_on_stock_of_active_shop(self):
-        """Le queryset suit la boutique active, mais le contrôle objet suit user.shop."""
-        self.shop_b.managers.add(self.manager)
-        stock_b = Stock.objects.create(
-            product=self.product, shop=self.shop_b, location='MAGASIN', quantity=3,
-        )
-        response = self.call(
-            self.manager, 'get', f'/api/stocks/{stock_b.id}/',
-            HTTP_X_ACTIVE_SHOP=str(self.shop_b.id),
-        )
-        self.assertEqual(response.status_code, 403, response.content)
-
     def test_FLAW_bulk_update_prices_crashes(self):
         with self.assertRaises(TypeError):
             self.call(self.admin, 'post', '/api/products/bulk_update_prices/', {
                 'product_ids': [self.product.id], 'percentage_increase': 10,
-            })
-
-    def test_FLAW_super_admin_expense_crashes_because_it_has_no_shop(self):
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            self.call(self.admin, 'post', '/api/expenses/', {
-                'session': self.session.id, 'label': 'Transport', 'amount': '500',
-                'sale_date': date.today().isoformat(),
             })
 
     def test_FLAW_inventory_of_today_is_refused_between_midnight_and_1am(self):

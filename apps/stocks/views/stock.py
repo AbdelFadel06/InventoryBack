@@ -21,7 +21,8 @@ from apps.stocks.serializers import (
 from apps.stocks.permissions import (
     CanManageStock,
     CanCreateStockMovement,
-    CanManageTransfers
+    CanManageTransfers,
+    CanWriteStock,
 )
 from apps.accounts.permissions import IsSuperAdmin
 from apps.shops.mixins import ActiveShopMixin
@@ -142,7 +143,7 @@ class StockMovementViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
             return queryset.filter(shop=active_shop)
         return queryset.none()
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, CanWriteStock])
     def add_stock(self, request):
         """Enregistrer une entrée de stock (arrivage boutique ou magasin)."""
         data = request.data.copy()
@@ -172,7 +173,7 @@ class StockMovementViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
         except DjangoValidationError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, CanWriteStock])
     def remove_stock(self, request):
         data = request.data.copy()
         if 'quantity' in data:
@@ -180,14 +181,21 @@ class StockMovementViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
         if 'movement_type' not in data:
             data['movement_type'] = 'exit'
 
+        # Par défaut BOUTIQUE sauf si magasinier
+        if request.user.is_magasinier and 'location' not in data:
+            data['location'] = 'MAGASIN'
+
         serializer = StockMovementCreateSerializer(data=data, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        shop_id = serializer.validated_data['shop'].id
+        shop_id  = serializer.validated_data['shop'].id
+        location = serializer.validated_data.get('location', 'BOUTIQUE')
 
         if not request.user.is_super_admin:
             active_shop = self.get_active_shop(request)
             if active_shop and active_shop.id != shop_id:
                 return Response({'error': 'Vous ne pouvez pas retirer du stock de cette boutique.'}, status=status.HTTP_403_FORBIDDEN)
+            if request.user.is_magasinier and location != 'MAGASIN':
+                return Response({'error': 'Le magasinier ne peut retirer que du stock magasin.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             movement = serializer.save()

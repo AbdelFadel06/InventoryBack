@@ -46,6 +46,11 @@ class CashierSessionCreateSerializer(serializers.ModelSerializer):
         # Vérifier que le caissier appartient à la boutique
         cashier = attrs.get('cashier')
         shop    = attrs.get('shop')
+
+        actor = self.context['request'].user
+        if actor.is_shop_manager and shop and not actor.managed_shops.filter(id=shop.id).exists():
+            raise serializers.ValidationError({'shop': "Vous ne gérez pas cette boutique."})
+
         if cashier and shop and cashier.shop != shop:
             raise serializers.ValidationError({
                 'cashier': "Ce caissier n'appartient pas à cette boutique."
@@ -119,27 +124,36 @@ class SaleSerializer(serializers.ModelSerializer):
     payment_label  = serializers.CharField(source='get_payment_method_display', read_only=True)
     sale_type_label = serializers.CharField(source='get_sale_type_display', read_only=True)
     items_count    = serializers.SerializerMethodField()
+    open_issue     = serializers.SerializerMethodField()
 
     class Meta:
         model  = Sale
         fields = [
-            'id', 'reference', 'shop', 'shop_name', 'session',
+            'id', 'reference', 'shop', 'shop_name', 'session', 'open_issue',
             'cashier', 'cashier_name',
             'sale_type', 'sale_type_label',
             'payment_method', 'payment_label', 'payment_status',
             'livreur', 'livreur_name', 'delivery_address', 'client_phone',
             'delivered_at', 'livreur_paid',
             'subtotal', 'order_discount', 'total_discount', 'total_amount',
-            'status', 'notes', 'items', 'items_count',
+            'status', 'cancelled_at', 'cancelled_by', 'cancel_reason',
+            'notes', 'items', 'items_count',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
             'id', 'reference', 'subtotal', 'total_discount',
-            'total_amount', 'created_at', 'updated_at'
+            'total_amount', 'cancelled_at', 'cancelled_by', 'cancel_reason',
+            'created_at', 'updated_at'
         ]
 
     def get_items_count(self, obj):
         return obj.items.count()
+
+    def get_open_issue(self, obj):
+        issue = obj.issues.filter(status='open').first()
+        if not issue:
+            return None
+        return {'id': issue.id, 'reason_label': issue.get_reason_display(), 'comment': issue.comment}
 
 
 class SaleListSerializer(serializers.ModelSerializer):
@@ -195,22 +209,11 @@ class SaleCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Vous n'êtes pas assigné à une boutique.")
 
         # Vérifier session active
-        session = CashierSession.objects.filter(
-            shop=shop, status='active',
-            start_date__lte=timezone.now().date(),
-            end_date__gte=timezone.now().date(),
-        ).first()
+        session = CashierSession.active_for_shop(shop)
 
         if not session:
             raise serializers.ValidationError(
                 "Aucune session de caisse active. Le manager doit ouvrir une session."
-            )
-
-        # Vérifier que l'utilisateur est bien le caissier désigné
-        if request.user.role == 'EMPLOYEE' and session.cashier != request.user:
-            raise serializers.ValidationError(
-                f"Vous n'êtes pas le caissier désigné pour cette session. "
-                f"Caissier actuel : {session.cashier.get_full_name()}"
             )
 
         attrs['_session'] = session
@@ -330,6 +333,15 @@ class ExpenseSerializer(serializers.ModelSerializer):
         model  = Expense
         fields = ['id', 'session', 'shop', 'label', 'amount', 'sale_date', 'created_by', 'created_by_name', 'created_at']
         read_only_fields = ['id', 'created_at', 'created_by', 'shop']
+
+    def validate_session(self, session):
+        user = self.context['request'].user
+        shop = self.context.get('active_shop') or user.shop
+        if shop and session.shop_id != shop.id:
+            raise serializers.ValidationError("Cette session n'appartient pas à votre boutique.")
+        if user.role == 'EMPLOYEE' and session != CashierSession.active_for_shop(shop):
+            raise serializers.ValidationError("La dépense doit être rattachée à la session active.")
+        return session
 
     def create(self, validated_data):
         request = self.context.get('request')

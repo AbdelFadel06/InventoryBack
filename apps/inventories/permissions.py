@@ -31,13 +31,11 @@ class CanManageInventories(permissions.BasePermission):
         if user.is_shop_manager:
             return user.managed_shops.filter(id=obj.shop_id).exists()
 
-        # Employee : accès en lecture + comptage uniquement sur sa boutique
-        if user.is_employee:
-            if view.action in ['count_product', 'count_multiple'] or request.method in permissions.SAFE_METHODS:
-                return obj.shop == user.shop
-            return False
-
-        return obj.shop == user.shop
+        # Autres rôles : lecture + comptage sur leur boutique. Annuler, supprimer
+        # ou faire avancer un inventaire est réservé au manager et au Super Admin.
+        if view.action in ['count_product', 'count_multiple'] or request.method in permissions.SAFE_METHODS:
+            return obj.shop == user.shop
+        return False
 
 
 class CanCountInventory(permissions.BasePermission):

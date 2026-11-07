@@ -60,11 +60,21 @@ class CashierSession(models.Model):
     @property
     def is_active(self):
         from django.utils import timezone
-        today = timezone.now().date()
+        today = timezone.localdate()
         return (
             self.status == 'active' and
             self.start_date <= today <= self.end_date
         )
+
+    @classmethod
+    def active_for_shop(cls, shop):
+        """Session ouverte aujourd'hui (date locale de la boutique, pas UTC)."""
+        from django.utils import timezone
+        today = timezone.localdate()
+        return cls.objects.filter(
+            shop=shop, status='active',
+            start_date__lte=today, end_date__gte=today,
+        ).first()
 
 
 class Sale(models.Model):
@@ -152,6 +162,14 @@ class Sale(models.Model):
         max_length=10, choices=STATUS_CHOICES,
         default='completed', verbose_name="Statut"
     )
+
+    # Trace de l'annulation
+    cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name="Annulée le")
+    cancelled_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sales_cancelled', verbose_name="Annulée par"
+    )
+    cancel_reason = models.TextField(blank=True, default='', verbose_name="Motif d'annulation")
 
     notes      = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

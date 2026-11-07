@@ -1,6 +1,21 @@
 from rest_framework import permissions
 
 
+def manages_shop(user, shop):
+    """Boutique courante du manager, ou l'une de celles qu'il gère (multi-boutiques)."""
+    return user.shop_id == shop.id or user.managed_shops.filter(id=shop.id).exists()
+
+
+class CanWriteStock(permissions.BasePermission):
+    """Entrées et sorties de stock : Super Admin, Manager et Magasinier."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        return user.is_super_admin or user.is_shop_manager or user.is_magasinier
+
+
 class CanManageStock(permissions.BasePermission):
     """
     - SUPER_ADMIN   : tout
@@ -21,12 +36,14 @@ class CanManageStock(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             if user.is_super_admin:
                 return True
+            if user.is_shop_manager:
+                return manages_shop(user, obj.shop)
             return obj.shop == user.shop
 
         if user.is_super_admin:
             return True
         if user.is_shop_manager:
-            return obj.shop == user.shop
+            return manages_shop(user, obj.shop)
         if user.is_magasinier:
             return obj.shop == user.shop and obj.location == 'MAGASIN'
         return False
@@ -47,6 +64,8 @@ class CanCreateStockMovement(permissions.BasePermission):
         user = request.user
         if user.is_super_admin:
             return True
+        if user.is_shop_manager:
+            return manages_shop(user, obj.shop)
         return obj.shop == user.shop
 
 
@@ -70,12 +89,14 @@ class CanManageTransfers(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             if user.is_super_admin:
                 return True
+            if user.is_shop_manager:
+                return manages_shop(user, obj.from_shop) or manages_shop(user, obj.to_shop)
             return obj.from_shop == user.shop or obj.to_shop == user.shop
 
         if user.is_super_admin:
             return True
         if user.is_shop_manager:
-            return obj.from_shop == user.shop or obj.to_shop == user.shop
+            return manages_shop(user, obj.from_shop) or manages_shop(user, obj.to_shop)
         if user.is_magasinier:
             # Peut gérer uniquement les transferts warehouse de sa boutique
             return obj.transfer_type == 'warehouse' and obj.from_shop == user.shop

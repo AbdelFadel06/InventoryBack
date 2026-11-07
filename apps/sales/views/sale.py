@@ -15,6 +15,11 @@ from apps.sales.serializers.sale import (
     SaleSerializer, SaleListSerializer, SaleCreateSerializer,
     ExpenseSerializer,
 )
+from apps.sales.serializers.issue import SaleIssueCreateSerializer, SaleIssueSerializer
+from apps.sales.permissions import (
+    CanModifyDelivery, CanReadBoutiqueFigures, IsLivreur, IsManagerOrAdmin,
+    IsRegisterOperator, NoWarehouseAccess,
+)
 from apps.shops.mixins import ActiveShopMixin
 
 
@@ -29,10 +34,25 @@ class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     search_fields      = ['cashier__first_name', 'cashier__last_name', 'cashier__email']
     ordering           = ['-start_date']
 
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'active'):
+            return [IsAuthenticated(), CanReadBoutiqueFigures()]
+        return [IsAuthenticated(), IsManagerOrAdmin()]
+
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return CashierSessionCreateSerializer
         return CashierSessionSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        # La suppression d'une session efface en cascade ses ventes et ses dépenses.
+        session = self.get_object()
+        if session.sales.exists() or session.expenses.exists():
+            return Response(
+                {'error': "Impossible de supprimer une session qui contient des ventes ou des dépenses."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
     def get_queryset(self):
         qs   = super().get_queryset()
@@ -49,7 +69,7 @@ class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def active(self, request):
         """Session active — filtrée par caissier pour les employés, par shop pour managers/admins"""
-        today = timezone.now().date()
+        today = timezone.localdate()
         user  = request.user
         shop  = self.get_active_shop(request)
 
@@ -99,6 +119,24 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     search_fields      = ['reference', 'cashier__first_name', 'cashier__last_name', 'livreur__first_name', 'livreur__last_name']
     ordering           = ['-created_at']
     http_method_names  = ['get', 'post', 'head', 'options']
+
+    # Le queryset limite le livreur à ses propres livraisons.
+    DELIVERY_READ_ACTIONS = ('list', 'retrieve', 'livreur_point')
+    REPORT_ACTIONS = ('livreur_stats', 'daily_report', 'period_report', 'monthly_summary')
+    REGISTER_ACTIONS = ('create', 'validate_payment', 'report_issue')
+
+    def get_permissions(self):
+        if self.action in self.DELIVERY_READ_ACTIONS:
+            return [IsAuthenticated(), NoWarehouseAccess()]
+        if self.action in self.REPORT_ACTIONS:
+            return [IsAuthenticated(), CanReadBoutiqueFigures()]
+        if self.action in self.REGISTER_ACTIONS:
+            return [IsAuthenticated(), IsRegisterOperator()]
+        if self.action == 'modify_items':
+            return [IsAuthenticated(), CanModifyDelivery()]
+        if self.action == 'mark_delivered':
+            return [IsAuthenticated(), IsLivreur()]
+        return [IsAuthenticated(), IsManagerOrAdmin()]
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -166,6 +204,10 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         if sale.status == 'cancelled':
             return Response({'error': 'Vente déjà annulée.'}, status=400)
 
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            return Response({'error': "Le motif d'annulation est obligatoire."}, status=400)
+
         from apps.stocks.models import StockMovement
         from django.db import transaction as db_transaction
 
@@ -181,9 +223,32 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
                     created_by=request.user,
                 )
             sale.status = 'cancelled'
-            sale.save(update_fields=['status'])
+            sale.cancelled_at = timezone.now()
+            sale.cancelled_by = request.user
+            sale.cancel_reason = reason
+            sale.save(update_fields=['status', 'cancelled_at', 'cancelled_by', 'cancel_reason'])
+            sale.issues.filter(status='open').update(
+                status='resolved',
+                resolved_by=request.user,
+                resolved_at=sale.cancelled_at,
+                resolution_note=f"Vente annulée : {reason}",
+            )
 
         return Response(SaleSerializer(sale).data)
+
+    @action(detail=True, methods=['post'])
+    def report_issue(self, request, pk=None):
+        """Signaler un problème : la vente et le stock restent inchangés jusqu'au traitement du manager."""
+        sale = self.get_object()
+        if sale.status == 'cancelled':
+            return Response({'error': 'Cette vente est déjà annulée.'}, status=400)
+        if sale.issues.filter(status='open').exists():
+            return Response({'error': 'Cette vente est déjà signalée.'}, status=400)
+
+        serializer = SaleIssueCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        issue = sale.issues.create(reported_by=request.user, **serializer.validated_data)
+        return Response(SaleIssueSerializer(issue).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     def modify_items(self, request, pk=None):
@@ -693,10 +758,10 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
             status='completed',
             created_at__date=report_date,
         )
-        if livreur_id:
-            qs = qs.filter(livreur_id=livreur_id)
-        elif request.user.role == 'LIVREUR':
+        if request.user.role == 'LIVREUR':
             qs = qs.filter(livreur=request.user)
+        elif livreur_id:
+            qs = qs.filter(livreur_id=livreur_id)
 
         # Managers/employees: filtered to their active shop
         # Livreurs: all their deliveries across all shops
@@ -723,6 +788,13 @@ class ExpenseViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     serializer_class   = ExpenseSerializer
     filter_backends    = [DjangoFilterBackend]
     filterset_fields   = ['session', 'sale_date']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated(), CanReadBoutiqueFigures()]
+        if self.action == 'create':
+            return [IsAuthenticated(), IsRegisterOperator()]
+        return [IsAuthenticated(), IsManagerOrAdmin()]
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
