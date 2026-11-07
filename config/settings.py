@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'apps.inventories',
     'apps.accounts',
     'apps.sales',
+    'apps.notifications',
 
 
 
@@ -236,3 +237,9 @@ EMAIL_HOST_USER     = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL', default='ShopM <noreply@shopm.com>')
 FRONTEND_URL        = config('FRONTEND_URL', default='http://localhost:5173')
+
+# Notifications sur téléphone (Web Push). Sans clés, rien n'est envoyé.
+# Générer : venv/bin/python manage.py generate_vapid_keys >> .env
+VAPID_PUBLIC_KEY  = config('VAPID_PUBLIC_KEY', default='')
+VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
+VAPID_SUBJECT     = config('VAPID_SUBJECT', default='https://shopm.abdelsaliou.dev')

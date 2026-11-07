@@ -247,6 +247,16 @@ class StockMovement(models.Model):
 
             self.quantity_after = new_quantity
 
+            if self.location == 'BOUTIQUE' and self.quantity_before > 0 and new_quantity == 0:
+                from apps.notifications.push import notify_shop_managers
+                notify_shop_managers(
+                    self.shop,
+                    title=f"Rupture de stock · {self.shop.name}",
+                    body=f"{self.product.name} n'a plus de stock en boutique.",
+                    url=f"/manager/stocks?status=out_of_stock&shop={self.shop_id}",
+                    tag=f"rupture-{self.shop_id}-{self.product_id}",
+                )
+
         super().save(*args, **kwargs)
 
 
