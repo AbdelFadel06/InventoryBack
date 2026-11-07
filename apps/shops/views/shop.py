@@ -16,7 +16,7 @@ from apps.shops.serializers import (
     ShopAssignEmployeesSerializer,
 )
 from apps.shops.permissions import IsSuperAdminOrReadOnly, CanManageShop
-from apps.accounts.permissions import IsSuperAdmin
+from apps.accounts.permissions import IsSuperAdmin, MANAGER_MANAGEABLE_ROLES
 
 
 class ShopViewSet(viewsets.ModelViewSet):
@@ -160,7 +160,11 @@ class ShopViewSet(viewsets.ModelViewSet):
         # Le manager ne peut affecter que des employés dont il gère la home_shop
         if request.user.is_shop_manager:
             managed_shop_ids = request.user.managed_shops.values_list('id', flat=True)
-            users = User.objects.filter(id__in=user_ids, home_shop_id__in=managed_shop_ids)
+            users = User.objects.filter(
+                id__in=user_ids,
+                home_shop_id__in=managed_shop_ids,
+                role__in=MANAGER_MANAGEABLE_ROLES,
+            )
         else:
             users = User.objects.filter(id__in=user_ids)
 
