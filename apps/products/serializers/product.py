@@ -203,26 +203,15 @@ class ProductListSerializer(serializers.ModelSerializer):
         return obj.is_low_stock()
 
 
-class ProductStockAlertSerializer(serializers.ModelSerializer):
+class ProductStockAlertSerializer(ProductListSerializer):
     """
-    Serializer pour les alertes de stock
+    Serializer pour les alertes de stock : les champs de la liste produits
+    (prix, image, code-barres…), plus les seuils et le statut du stock.
     """
-    category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
-    shop_name = serializers.CharField(source='shop.name', read_only=True, allow_null=True)
-    current_stock = serializers.SerializerMethodField()
     stock_status = serializers.SerializerMethodField()
 
-    class Meta:
-        model = Product
-        fields = [
-            'id', 'name', 'sku', 'category_name', 'shop_name',
-            'minimum_stock', 'reorder_level', 'current_stock', 'stock_status'
-        ]
-
-    def get_current_stock(self, obj):
-        request = self.context.get('request')
-        shop = _get_active_shop(request)
-        return obj.get_current_stock(shop=shop)
+    class Meta(ProductListSerializer.Meta):
+        fields = ProductListSerializer.Meta.fields + ['minimum_stock', 'reorder_level', 'stock_status']
 
     def get_stock_status(self, obj):
         current_stock = self.get_current_stock(obj)
