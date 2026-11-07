@@ -208,33 +208,67 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         if not reason:
             return Response({'error': "Le motif d'annulation est obligatoire."}, status=400)
 
-        from apps.stocks.models import StockMovement
         from django.db import transaction as db_transaction
 
         with db_transaction.atomic():
-            for item in sale.items.all():
-                StockMovement.objects.create(
-                    product=item.product,
-                    shop=sale.shop,
-                    movement_type='return',
-                    quantity=item.quantity,
-                    reference=sale.reference,
-                    reason=f"Annulation vente {sale.reference}",
-                    created_by=request.user,
-                )
-            sale.status = 'cancelled'
-            sale.cancelled_at = timezone.now()
-            sale.cancelled_by = request.user
-            sale.cancel_reason = reason
-            sale.save(update_fields=['status', 'cancelled_at', 'cancelled_by', 'cancel_reason'])
-            sale.issues.filter(status='open').update(
-                status='resolved',
-                resolved_by=request.user,
-                resolved_at=sale.cancelled_at,
-                resolution_note=f"Vente annulée : {reason}",
-            )
+            self._cancel_sale(sale, request.user, reason, f"Vente annulée : {reason}")
 
         return Response(SaleSerializer(sale).data)
+
+    @staticmethod
+    def _cancel_sale(sale, user, reason, resolution_note):
+        """Remet le stock, garde la trace de l'annulation et clôt les signalements ouverts."""
+        from apps.stocks.models import StockMovement
+
+        for item in sale.items.all():
+            StockMovement.objects.create(
+                product=item.product,
+                shop=sale.shop,
+                movement_type='return',
+                quantity=item.quantity,
+                reference=sale.reference,
+                reason=f"Annulation vente {sale.reference}",
+                created_by=user,
+            )
+        sale.status = 'cancelled'
+        sale.cancelled_at = timezone.now()
+        sale.cancelled_by = user
+        sale.cancel_reason = reason
+        sale.save(update_fields=['status', 'cancelled_at', 'cancelled_by', 'cancel_reason'])
+        sale.issues.filter(status='open').update(
+            status='resolved',
+            resolved_by=user,
+            resolved_at=sale.cancelled_at,
+            resolution_note=resolution_note,
+        )
+
+    @action(detail=True, methods=['post'])
+    def correct(self, request, pk=None):
+        """
+        Corriger une vente : l'annule et crée la vente juste, en une seule opération.
+        Corps : reason, puis les champs d'une vente (items avec unit_price facultatif, paiement, livraison).
+        """
+        from django.db import transaction as db_transaction
+
+        original = self.get_object()
+        if original.status == 'cancelled':
+            return Response({'error': 'Cette vente est déjà annulée.'}, status=400)
+
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            return Response({'error': 'Le motif de la correction est obligatoire.'}, status=400)
+
+        # Tout ou rien : si la nouvelle vente est refusée (stock insuffisant…), l'annulation est défaite.
+        with db_transaction.atomic():
+            self._cancel_sale(original, request.user, f"Corrigée : {reason}", f"Vente corrigée : {reason}")
+            serializer = SaleCreateSerializer(
+                data=request.data,
+                context={'request': request, 'active_shop': original.shop, 'correction_of': original},
+            )
+            serializer.is_valid(raise_exception=True)
+            corrected = serializer.save()
+
+        return Response(SaleSerializer(corrected).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     def report_issue(self, request, pk=None):

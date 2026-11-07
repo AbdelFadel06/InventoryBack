@@ -112,6 +112,10 @@ class SaleItemCreateSerializer(serializers.Serializer):
         max_digits=10, decimal_places=2,
         required=False, default=Decimal('0.00')
     )
+    # Pris en compte seulement pour une correction : la caisse vend toujours au prix du catalogue.
+    unit_price     = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal('0.00'), required=False,
+    )
 
 
 # ── Sale ───────────────────────────────────────────────────────────
@@ -125,11 +129,14 @@ class SaleSerializer(serializers.ModelSerializer):
     sale_type_label = serializers.CharField(source='get_sale_type_display', read_only=True)
     items_count    = serializers.SerializerMethodField()
     open_issue     = serializers.SerializerMethodField()
+    corrected_from_reference = serializers.CharField(source='corrected_from.reference', read_only=True, allow_null=True)
+    corrected_by_sale        = serializers.SerializerMethodField()
 
     class Meta:
         model  = Sale
         fields = [
             'id', 'reference', 'shop', 'shop_name', 'session', 'open_issue',
+            'corrected_from', 'corrected_from_reference', 'corrected_by_sale',
             'cashier', 'cashier_name',
             'sale_type', 'sale_type_label',
             'payment_method', 'payment_label', 'payment_status',
@@ -142,12 +149,17 @@ class SaleSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'reference', 'subtotal', 'total_discount',
-            'total_amount', 'cancelled_at', 'cancelled_by', 'cancel_reason',
+            'total_amount', 'cancelled_at', 'cancelled_by', 'cancel_reason', 'corrected_from',
             'created_at', 'updated_at'
         ]
 
     def get_items_count(self, obj):
         return obj.items.count()
+
+    def get_corrected_by_sale(self, obj):
+        """Vente qui remplace celle-ci, si elle a été corrigée."""
+        correction = obj.corrections.order_by('-id').first()
+        return {'id': correction.id, 'reference': correction.reference} if correction else None
 
     def get_open_issue(self, obj):
         issue = obj.issues.filter(status='open').first()
@@ -208,8 +220,9 @@ class SaleCreateSerializer(serializers.Serializer):
         if not shop:
             raise serializers.ValidationError("Vous n'êtes pas assigné à une boutique.")
 
-        # Vérifier session active
-        session = CashierSession.active_for_shop(shop)
+        # Une correction reste dans la session (et donc la journée) de la vente qu'elle remplace.
+        correction_of = self.context.get('correction_of')
+        session = correction_of.session if correction_of else CashierSession.active_for_shop(shop)
 
         if not session:
             raise serializers.ValidationError(
@@ -267,11 +280,24 @@ class SaleCreateSerializer(serializers.Serializer):
         # Livraisons cash/mobile_money : pas d'argent à récupérer → livreur déjà réglé
         # Livraisons on_delivery : livreur collecte le cash chez le client → à régler manuellement
         livreur_paid_default = (sale_type == 'delivery' and payment_method != 'on_delivery')
+        delivered_at = None
+
+        correction_of = self.context.get('correction_of')
+        if correction_of:
+            # Même paiement : l'argent déjà encaissé ou remis par le livreur ne doit pas redevenir dû.
+            if payment_method == correction_of.payment_method:
+                payment_status = correction_of.payment_status
+                delivered_at   = correction_of.delivered_at
+                if livreur == correction_of.livreur:
+                    livreur_paid_default = correction_of.livreur_paid
 
         sale = Sale.objects.create(
             session=session,
             shop=shop,
-            cashier=request.user,
+            # La vente reste au nom du caissier qui l'a faite ; l'annulation garde le nom du manager.
+            cashier=correction_of.cashier if correction_of else request.user,
+            corrected_from=correction_of,
+            delivered_at=delivered_at,
             sale_type=sale_type,
             payment_method=payment_method,
             payment_status=payment_status,
@@ -288,6 +314,8 @@ class SaleCreateSerializer(serializers.Serializer):
         for item_data in items:
             product    = Product.objects.get(id=item_data['product'])
             unit_price = product.selling_price
+            if correction_of and item_data.get('unit_price') is not None:
+                unit_price = item_data['unit_price']
             quantity   = item_data['quantity']
 
             sale_item = SaleItem(
@@ -320,6 +348,11 @@ class SaleCreateSerializer(serializers.Serializer):
         sale.total_discount  = discount + order_discount
         sale.total_amount    = subtotal - discount - order_discount
         sale.save(update_fields=['subtotal', 'order_discount', 'total_discount', 'total_amount'])
+
+        if correction_of:
+            # Garde la date d'origine : les rapports du jour concerné restent justes.
+            Sale.objects.filter(id=sale.id).update(created_at=correction_of.created_at)
+            sale.refresh_from_db(fields=['created_at'])
 
         return sale
 

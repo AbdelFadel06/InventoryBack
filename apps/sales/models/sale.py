@@ -171,6 +171,11 @@ class Sale(models.Model):
     )
     # db_default : le code encore en ligne pendant une migration ne connaît pas cette colonne.
     cancel_reason = models.TextField(blank=True, default='', db_default='', verbose_name="Motif d'annulation")
+    # Vente annulée que celle-ci remplace, après une correction par le manager.
+    corrected_from = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='corrections', verbose_name="Corrige la vente"
+    )
 
     notes      = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
