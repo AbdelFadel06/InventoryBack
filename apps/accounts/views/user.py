@@ -23,14 +23,16 @@ from apps.accounts.permissions import (
     manager_can_manage,
 )
 from apps.shops.models import Shop
+from config.list_summary import ListSummaryMixin
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(ListSummaryMixin, viewsets.ModelViewSet):
     """Gestion des utilisateurs — Super Admin ou Shop Manager"""
     queryset         = User.objects.select_related('shop').all()
     permission_classes = [IsAuthenticated]
     filter_backends  = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['role', 'is_active', 'shop']
+    summary_group_by = 'role'
     search_fields    = ['email', 'first_name', 'last_name']
     ordering_fields  = ['email', 'first_name', 'last_name', 'created_at']
     ordering         = ['last_name', 'first_name']
@@ -54,6 +56,9 @@ class UserViewSet(viewsets.ModelViewSet):
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), CanManageUser()]
         return [IsAuthenticated()]
+
+    def build_summary(self, queryset):
+        return {**super().build_summary(queryset), 'inactive': queryset.filter(is_active=False).count()}
 
     def get_queryset(self):
         user = self.request.user

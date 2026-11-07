@@ -23,9 +23,10 @@ from apps.inventories.permissions import (
 )
 from apps.stocks.models import Stock, StockMovement
 from apps.shops.mixins import ActiveShopMixin
+from config.list_summary import ListSummaryMixin
 
 
-class InventoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
+class InventoryViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
     """
     ViewSet pour gérer les inventaires
 
@@ -41,6 +42,7 @@ class InventoryViewSet(ActiveShopMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, CanManageInventories]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['shop', 'status', 'inventory_date']
+    summary_group_by = 'status'
     search_fields = ['reference', 'notes']
     ordering_fields = ['inventory_date', 'created_at']
     ordering = ['-inventory_date']

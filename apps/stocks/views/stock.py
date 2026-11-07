@@ -2,7 +2,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -26,9 +26,19 @@ from apps.stocks.permissions import (
 )
 from apps.accounts.permissions import IsSuperAdmin
 from apps.shops.mixins import ActiveShopMixin
+from config.list_summary import ListSummaryMixin
+
+# Mêmes règles que Stock.stock_status, traduites en requête pour filtrer toute la liste.
+_NOT_EMPTY = ~Q(quantity=0)
+STOCK_STATUS_FILTERS = {
+    'out_of_stock': Q(quantity=0),
+    'critical':     _NOT_EMPTY & Q(quantity__lt=F('product__minimum_stock')),
+    'low':          _NOT_EMPTY & Q(quantity__gte=F('product__minimum_stock'), quantity__lte=F('product__reorder_level')),
+    'ok':           _NOT_EMPTY & Q(quantity__gte=F('product__minimum_stock'), quantity__gt=F('product__reorder_level')),
+}
 
 
-class StockViewSet(ActiveShopMixin, viewsets.ModelViewSet):
+class StockViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
     queryset = Stock.objects.select_related('product', 'shop', 'updated_by').all()
     permission_classes = [IsAuthenticated, CanManageStock]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -53,6 +63,17 @@ class StockViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         if active_shop:
             return queryset.filter(shop=active_shop)
         return queryset.none()
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        stock_status = self.request.query_params.get('stock_status')
+        if stock_status in STOCK_STATUS_FILTERS:
+            queryset = queryset.filter(STOCK_STATUS_FILTERS[stock_status])
+        return queryset
+
+    def build_summary(self, queryset):
+        by = queryset.aggregate(**{name: Count('pk', filter=rule) for name, rule in STOCK_STATUS_FILTERS.items()})
+        return {'total': sum(by.values()), 'by': by}
 
     @action(detail=False, methods=['get'])
     def alerts(self, request):
@@ -121,7 +142,8 @@ class StockViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         return Response(list(rows))
 
 
-class StockMovementViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
+class StockMovementViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
+    summary_group_by = 'movement_type'
     queryset = StockMovement.objects.select_related('product', 'shop', 'related_shop', 'created_by').all()
     serializer_class = StockMovementSerializer
     permission_classes = [IsAuthenticated, CanCreateStockMovement]
@@ -204,7 +226,8 @@ class StockMovementViewSet(ActiveShopMixin, viewsets.ReadOnlyModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class StockTransferViewSet(ActiveShopMixin, viewsets.ModelViewSet):
+class StockTransferViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
+    summary_group_by = 'status'
     queryset = StockTransfer.objects.select_related(
         'from_shop', 'to_shop', 'product', 'created_by', 'received_by'
     ).all()

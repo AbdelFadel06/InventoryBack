@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Sum, Count
+from config.list_summary import ListSummaryMixin
 from django.db.models.functions import TruncDate
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
@@ -23,7 +24,7 @@ from apps.sales.permissions import (
 from apps.shops.mixins import ActiveShopMixin
 
 
-class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
+class CashierSessionViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
     """Gestion des sessions de caisse — Manager/Admin uniquement"""
     queryset = CashierSession.objects.select_related(
         'shop', 'cashier', 'created_by'
@@ -65,6 +66,30 @@ class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         if active_shop:
             return qs.filter(shop=active_shop)
         return qs.none()
+
+    @staticmethod
+    def _states():
+        """En cours aujourd'hui, à venir, ou terminée (clôturée ou date passée)."""
+        today = timezone.localdate()
+        current = Q(status='active', start_date__lte=today, end_date__gte=today)
+        upcoming = Q(status='active', start_date__gt=today)
+        return {'current': current, 'upcoming': upcoming, 'closed': ~current & ~upcoming}
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        state = self.request.query_params.get('state')
+        states = self._states()
+        if state in states:
+            queryset = queryset.filter(states[state])
+        return queryset
+
+    def build_summary(self, queryset):
+        states = self._states()
+        by = queryset.aggregate(**{name: Count('pk', filter=rule) for name, rule in states.items()})
+        current_sales = Sale.objects.filter(
+            session__in=queryset.filter(states['current']), status='completed',
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        return {'total': sum(by.values()), 'by': by, 'current_sales_total': current_sales}
 
     @action(detail=False, methods=['get'])
     def active(self, request):
@@ -109,7 +134,7 @@ class CashierSessionViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         return Response(CashierSessionSerializer(session).data)
 
 
-class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
+class SaleViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
     queryset = Sale.objects.select_related(
         'shop', 'cashier', 'livreur', 'session'
     ).prefetch_related('items__product').all()
@@ -187,6 +212,16 @@ class SaleViewSet(ActiveShopMixin, viewsets.ModelViewSet):
                     qs = qs.filter(created_at__date=today)
 
         return qs
+
+    def build_summary(self, queryset):
+        completed = Q(status='completed')
+        return queryset.aggregate(
+            total=Count('pk'),
+            completed=Count('pk', filter=completed),
+            cancelled=Count('pk', filter=Q(status='cancelled')),
+            unpaid=Count('pk', filter=completed & Q(payment_status='pending')),
+            revenue=Sum('total_amount', filter=completed, default=0),
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = SaleCreateSerializer(
