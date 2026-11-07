@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.sales',
     'apps.notifications',
+    'apps.access',
 
 
 

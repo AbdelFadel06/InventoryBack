@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/', include('apps.inventories.urls')),
     path('api/', include('apps.sales.urls')),
     path('api/', include('apps.notifications.urls')),
+    path('api/', include('apps.access.urls')),
 
 
     # JWT endpoints
