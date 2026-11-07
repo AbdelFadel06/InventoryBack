@@ -21,10 +21,13 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Toujours le Python du venv : « pip » seul installait les paquets ailleurs.
-            venv/bin/python -m pip install -r requirements.txt --quiet
-            venv/bin/python manage.py migrate --no-input
-            venv/bin/python manage.py collectstatic --no-input
+            # Le venv de gunicorn (/var/www/shopm/venv), pour tout : dépendances,
+            # migrations, fichiers statiques. L'ancien backend/venv venait d'un PC
+            # de développement (versionné par erreur) et son pip était cassé.
+            PY=/var/www/shopm/venv/bin/python
+            $PY -m pip install -r requirements.txt --quiet
+            $PY manage.py migrate --no-input
+            $PY manage.py collectstatic --no-input
 
             sudo systemctl restart gunicorn
 
