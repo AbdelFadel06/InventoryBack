@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='sale',
             name='cancel_reason',
-            field=models.TextField(blank=True, default='', verbose_name="Motif d'annulation"),
+            field=models.TextField(blank=True, db_default='', default='', verbose_name="Motif d'annulation"),
         ),
         migrations.AddField(
             model_name='sale',

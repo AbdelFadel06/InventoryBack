@@ -169,7 +169,8 @@ class Sale(models.Model):
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='sales_cancelled', verbose_name="Annulée par"
     )
-    cancel_reason = models.TextField(blank=True, default='', verbose_name="Motif d'annulation")
+    # db_default : le code encore en ligne pendant une migration ne connaît pas cette colonne.
+    cancel_reason = models.TextField(blank=True, default='', db_default='', verbose_name="Motif d'annulation")
 
     notes      = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
