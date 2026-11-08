@@ -106,7 +106,7 @@ class InventoryCreateSerializer(serializers.ModelSerializer):
 
     def validate_inventory_date(self, value):
         """Valider que la date n'est pas dans le futur"""
-        if value > timezone.now().date():
+        if value > timezone.localdate():
             raise serializers.ValidationError(
                 "La date d'inventaire ne peut pas être dans le futur."
             )

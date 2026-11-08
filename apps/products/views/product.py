@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -340,25 +342,32 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Decimal (pas float) : le prix est un Decimal, les mélanger faisait planter le calcul.
         try:
-            percentage = float(percentage)
-        except ValueError:
+            percentage = Decimal(str(percentage))
+        except (InvalidOperation, ValueError):
             return Response(
                 {'error': 'percentage_increase doit être un nombre.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if not percentage.is_finite() or percentage <= -100:
+            return Response(
+                {'error': 'percentage_increase doit être supérieur à -100.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        factor = 1 + percentage / 100
         products = Product.objects.filter(id__in=product_ids)
         updated_count = 0
 
         for product in products:
-            product.selling_price = product.selling_price * (1 + percentage / 100)
+            product.selling_price = (product.selling_price * factor).quantize(Decimal('0.01'))
             product.save()
             updated_count += 1
 
         return Response({
             'message': f'{updated_count} produits mis à jour avec succès.',
-            'percentage_increase': percentage
+            'percentage_increase': float(percentage)
         })
 
     @action(detail=True, methods=['post'])

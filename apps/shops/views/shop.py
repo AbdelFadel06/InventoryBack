@@ -160,7 +160,7 @@ class ShopViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         user_ids = serializer.validated_data['user_ids']
-        start_date = serializer.validated_data.get('start_date', timezone.now().date())
+        start_date = serializer.validated_data.get('start_date', timezone.localdate())
         note = serializer.validated_data.get('note', '')
 
         from apps.accounts.models import User

@@ -65,5 +65,5 @@ class ShopAssignment(models.Model):
     def close(self):
         """Terminer cette affectation."""
         self.is_active = False
-        self.end_date = timezone.now().date()
+        self.end_date = timezone.localdate()
         self.save(update_fields=['is_active', 'end_date'])

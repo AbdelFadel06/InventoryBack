@@ -28,7 +28,7 @@ class SummaryRightsTests(PermissionFixtures):
             start_date=timezone.localdate(), end_date=timezone.localdate(),
         ), total_amount=999)
         body = self.call(self.manager, 'get', '/api/sales/counts/').json()
-        self.assertEqual(body['total'], Sale.objects.filter(shop=self.shop_a, created_at__date=timezone.now().date()).count())
+        self.assertEqual(body['total'], Sale.objects.filter(shop=self.shop_a, created_at__date=timezone.localdate()).count())
 
 
 class StockFilterTests(PermissionFixtures):

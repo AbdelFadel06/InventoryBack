@@ -146,9 +146,9 @@
  "GET accounts:user-employees": {
   "admin": 200,
   "anonymous": 401,
-  "employee": 200,
-  "livreur": 200,
-  "magasinier": 200,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
   "manager": 200
  },
  "GET accounts:user-list": {
@@ -170,10 +170,10 @@
  "GET accounts:user-managers": {
   "admin": 200,
   "anonymous": 401,
-  "employee": 200,
-  "livreur": 200,
-  "magasinier": 200,
-  "manager": 200
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
  },
  "GET accounts:user-me": {
   "admin": 200,
@@ -632,12 +632,12 @@
   "manager": 200
  },
  "PATCH sales:cashier-session-detail": {
-  "admin": 500,
+  "admin": 200,
   "anonymous": 401,
   "employee": 403,
   "livreur": 403,
   "magasinier": 403,
-  "manager": 500
+  "manager": 200
  },
  "PATCH sales:expense-detail": {
   "admin": 200,
@@ -714,9 +714,9 @@
  "POST accounts:user-toggle-active": {
   "admin": 200,
   "anonymous": 401,
-  "employee": 404,
-  "livreur": 404,
-  "magasinier": 404,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
   "manager": 200
  },
  "POST inventories:inventory-add-products": {

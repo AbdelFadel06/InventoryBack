@@ -217,7 +217,7 @@ MATRIX = [
     # ── Inventaires ──────────────────────────────────────────────────
     ('inventories_list', 'get', lambda t: '/api/inventories/', no_data, ALL),
     ('inventories_create', 'post', lambda t: '/api/inventories/',
-     lambda t: {'shop': t.shop_a.id, 'inventory_date': timezone.now().date().isoformat()}, ADMIN_MANAGER),
+     lambda t: {'shop': t.shop_a.id, 'inventory_date': timezone.localdate().isoformat()}, ADMIN_MANAGER),
     ('inventories_count', 'post', lambda t: f'/api/inventories/{t.inventory.id}/count_product/',
      lambda t: {'line_id': t.line.id, 'counted_quantity': 9}, ALL),
     ('inventories_validate', 'post', lambda t: f'/api/inventories/{t.completed_inventory.id}/validate/',
@@ -268,10 +268,8 @@ MATRIX = [
     ('expenses_delete', 'delete', lambda t: f'/api/expenses/{t.expense.id}/', no_data, ADMIN_MANAGER),
 ]
 
-# Ces cases plantent aujourd'hui (erreur 500) : voir KnownFlawTests.
-CRASHING_CELLS = {
-    ('products_bulk_update_prices', ADMIN),
-}
+# Cases qui planteraient (erreur 500). Vide depuis la correction des prix en masse (2026-11-09).
+CRASHING_CELLS = set()
 
 
 def _add_matrix_tests():
@@ -318,26 +316,29 @@ class ShopIsolationTests(PermissionFixtures):
         self.assertNotEqual(self.sale.status, 'cancelled')
 
 
-class KnownFlawTests(PermissionFixtures):
-    """
-    Défauts connus, épinglés tels qu'ils existent aujourd'hui.
+class FixedFlawTests(PermissionFixtures):
+    """Anciens défauts connus, corrigés le 2026-11-09 : ces tests empêchent leur retour."""
 
-    Chaque test RÉUSSIT tant que le défaut existe. Quand il sera corrigé, le test
-    échouera : il faudra alors inverser son attente.
-    """
+    def test_bulk_update_prices_works(self):
+        response = self.call(self.admin, 'post', '/api/products/bulk_update_prices/', {
+            'product_ids': [self.product.id], 'percentage_increase': 10,
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.product.refresh_from_db()
+        self.assertEqual(str(self.product.selling_price), '1100.00')
 
-    def test_FLAW_bulk_update_prices_crashes(self):
-        with self.assertRaises(TypeError):
-            self.call(self.admin, 'post', '/api/products/bulk_update_prices/', {
-                'product_ids': [self.product.id], 'percentage_increase': 10,
+    def test_bulk_update_prices_refuses_absurd_percentages(self):
+        for value in (-100, -150, 'abc', 'NaN'):
+            response = self.call(self.admin, 'post', '/api/products/bulk_update_prices/', {
+                'product_ids': [self.product.id], 'percentage_increase': value,
             })
+            self.assertEqual(response.status_code, 400, value)
 
-    def test_FLAW_inventory_of_today_is_refused_between_midnight_and_1am(self):
+    def test_inventory_of_today_is_accepted_between_midnight_and_1am(self):
         """00 h 30 à Porto-Novo : la date locale est le 2, mais la comparaison se fait en UTC (le 1er)."""
         just_after_local_midnight = datetime(2026, 1, 1, 23, 30, tzinfo=dt_timezone.utc)
         with patch('apps.inventories.serializers.inventory.timezone.now', return_value=just_after_local_midnight):
             response = self.call(self.manager, 'post', '/api/inventories/', {
                 'shop': self.shop_a.id, 'inventory_date': '2026-01-02',
             })
-        self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn('inventory_date', response.json())
+        self.assertEqual(response.status_code, 201, response.content)

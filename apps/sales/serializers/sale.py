@@ -43,9 +43,16 @@ class CashierSessionCreateSerializer(serializers.ModelSerializer):
         fields = ['shop', 'cashier', 'period_type', 'start_date', 'end_date', 'notes']
 
     def validate(self, attrs):
+        # Modification partielle : les champs absents gardent leur valeur actuelle.
+        def current(field):
+            return attrs[field] if field in attrs else getattr(self.instance, field, None)
+
         # Vérifier que le caissier appartient à la boutique
-        cashier = attrs.get('cashier')
-        shop    = attrs.get('shop')
+        cashier = current('cashier')
+        shop    = current('shop')
+        start_date, end_date = current('start_date'), current('end_date')
+        if start_date is None or end_date is None:
+            raise serializers.ValidationError("Les dates de début et de fin sont requises.")
 
         actor = self.context['request'].user
         if actor.is_shop_manager and shop and not actor.managed_shops.filter(id=shop.id).exists():
@@ -60,8 +67,8 @@ class CashierSessionCreateSerializer(serializers.ModelSerializer):
         from django.db.models import Q
         existing = CashierSession.objects.filter(
             shop=shop, status='active',
-            start_date__lte=attrs['end_date'],
-            end_date__gte=attrs['start_date'],
+            start_date__lte=end_date,
+            end_date__gte=start_date,
         )
         if self.instance:
             existing = existing.exclude(pk=self.instance.pk)
@@ -71,7 +78,7 @@ class CashierSessionCreateSerializer(serializers.ModelSerializer):
             )
 
         # Vérifier les dates
-        if attrs['start_date'] > attrs['end_date']:
+        if start_date > end_date:
             raise serializers.ValidationError(
                 {'end_date': "La date de fin doit être après la date de début."}
             )
@@ -246,20 +253,24 @@ class SaleCreateSerializer(serializers.Serializer):
             if attrs.get('payment_method') not in ['cash', 'mobile_money', 'on_delivery']:
                 raise serializers.ValidationError({'payment_method': "Moyen de paiement invalide."})
 
-        # Vérifier stock
+        # Vérifier le stock de la BOUTIQUE (c'est lui que la vente décrémente, pas le magasin),
+        # sur la quantité totale demandée si le produit apparaît sur plusieurs lignes.
+        wanted = {}
         for item in attrs['items']:
+            wanted[item['product']] = wanted.get(item['product'], 0) + item['quantity']
+        for product_id, quantity in wanted.items():
             try:
-                product = Product.objects.get(id=item['product'], is_active=True)
+                product = Product.objects.get(id=product_id, is_active=True)
             except Product.DoesNotExist:
                 raise serializers.ValidationError(
-                    {'items': f"Produit ID {item['product']} introuvable."}
+                    {'items': f"Produit ID {product_id} introuvable."}
                 )
-            stock = Stock.objects.filter(product=product, shop=shop).first()
+            stock = Stock.objects.filter(product=product, shop=shop, location='BOUTIQUE').first()
             available = stock.quantity if stock else 0
-            if available < item['quantity']:
+            if available < quantity:
                 raise serializers.ValidationError({
                     'items': f"Stock insuffisant pour {product.name}. "
-                             f"Disponible: {available}, demandé: {item['quantity']}"
+                             f"Disponible en boutique : {available}, demandé : {quantity}"
                 })
         return attrs
 

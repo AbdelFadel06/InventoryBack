@@ -225,7 +225,7 @@ class SaleViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
                     except ValueError:
                         pass
                 else:
-                    today = timezone.now().date()
+                    today = timezone.localdate()
                     qs = qs.filter(created_at__date=today)
 
         return qs
@@ -591,7 +591,7 @@ class SaleViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
         GET /api/sales/daily_report/?date=2026-03-23
         """
         user     = request.user
-        date_str = request.query_params.get('date', str(timezone.now().date()))
+        date_str = request.query_params.get('date', str(timezone.localdate()))
 
         try:
             report_date = date.fromisoformat(date_str)
@@ -843,7 +843,7 @@ class SaleViewSet(ListSummaryMixin, ActiveShopMixin, viewsets.ModelViewSet):
         GET /api/sales/livreur_point/?livreur_id=X&date=2026-03-23
         """
         livreur_id = request.query_params.get('livreur_id')
-        date_str   = request.query_params.get('date', str(timezone.now().date()))
+        date_str   = request.query_params.get('date', str(timezone.localdate()))
 
         try:
             report_date = date.fromisoformat(date_str)

@@ -64,7 +64,9 @@ class UserViewSet(ListSummaryMixin, viewsets.ModelViewSet):
             return [IsAuthenticated(), CanManageUser()]
         if self.action in ('list', 'retrieve'):
             return [IsAuthenticated(), GridGate()]
-        return [IsAuthenticated()]
+        # Actions (managers, employees, toggle_active…) : les permissions déclarées sur
+        # chacune s'appliquent. Avant, elles étaient ignorées et tout compte connecté passait.
+        return [IsAuthenticated(), *super().get_permissions()]
 
     def build_summary(self, queryset):
         return {**super().build_summary(queryset), 'inactive': queryset.filter(is_active=False).count()}
