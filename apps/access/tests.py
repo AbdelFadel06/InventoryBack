@@ -146,3 +146,84 @@ class SwitchTests(PermissionFixtures):
         with override_settings(PERMISSIONS_ENFORCE=['all']):
             response = self.call(self.employee, 'patch', f'/api/users/{self.employee.id}/', {'first_name': 'Awa'})
         self.assertEqual(response.status_code, 200, response.content)
+
+
+class PermissionScreenApiTests(PermissionFixtures):
+    """Écran des permissions : modifications par le Super Admin seul, toutes journalisées."""
+
+    def put(self, user, url, data):
+        return self.call(user, 'put', url, data)
+
+    def test_role_cell_change_is_logged_and_applied(self):
+        from .models import PermissionChange
+        response = self.put(self.admin, '/api/access/roles/', {'role': 'EMPLOYEE', 'code': 'sales.cancel', 'allowed': True})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(RolePermission.objects.get(role='EMPLOYEE', code='sales.cancel').allowed)
+        change = PermissionChange.objects.get()
+        self.assertEqual((change.role, change.code, change.before, change.after), ('EMPLOYEE', 'sales.cancel', False, True))
+        # Même valeur une seconde fois : rien de plus au journal.
+        self.put(self.admin, '/api/access/roles/', {'role': 'EMPLOYEE', 'code': 'sales.cancel', 'allowed': True})
+        self.assertEqual(PermissionChange.objects.count(), 1)
+
+    def test_super_admin_cannot_remove_his_own_permission_management(self):
+        response = self.put(self.admin, '/api/access/roles/', {'role': 'SUPER_ADMIN', 'code': MANAGE_PERMISSIONS, 'allowed': False})
+        self.assertEqual(response.status_code, 400)
+        response = self.put(self.admin, f'/api/access/users/{self.admin.id}/', {'code': MANAGE_PERMISSIONS, 'allowed': False})
+        self.assertEqual(response.status_code, 400)
+
+    def test_personal_exception_set_then_cleared(self):
+        url = f'/api/access/users/{self.employee.id}/'
+        body = self.put(self.admin, url, {'code': 'sales.cancel', 'allowed': True}).json()
+        self.assertTrue(body['effective']['sales.cancel'])
+        self.assertEqual(body['overrides'], {'sales.cancel': True})
+        body = self.put(self.admin, url, {'code': 'sales.cancel', 'allowed': None}).json()
+        self.assertFalse(body['effective']['sales.cancel'])
+        self.assertEqual(body['overrides'], {})
+
+    def test_invalid_values_are_refused(self):
+        for data in ({'role': 'X', 'code': 'sales.cancel', 'allowed': True},
+                     {'role': 'EMPLOYEE', 'code': 'nope', 'allowed': True},
+                     {'role': 'EMPLOYEE', 'code': 'sales.cancel', 'allowed': 'oui'}):
+            self.assertEqual(self.put(self.admin, '/api/access/roles/', data).status_code, 400, data)
+
+    def test_switch_from_the_screen_takes_effect_and_is_logged(self):
+        from .models import PermissionChange
+        RolePermission.objects.filter(role='SHOP_MANAGER', code='products.create').update(allowed=False)
+        create = lambda: self.call(self.manager, 'post', '/api/products/', {
+            'name': 'Nouveau', 'sku': 'SKU-NEW', 'category': self.category.id, 'selling_price': 100})
+        self.assertEqual(create().status_code, 201)   # interrupteur éteint : ancienne règle
+
+        body = self.put(self.admin, '/api/access/switches/', {'module': 'produits', 'enabled': True}).json()
+        produits = next(m for m in body['modules'] if m['module'] == 'produits')
+        self.assertTrue(produits['enabled'] and produits['effective'])
+        self.call(self.manager, 'get', '/api/products/')   # nouvelle requête
+        self.assertEqual(create().status_code, 403)   # la grille décide
+        self.assertTrue(PermissionChange.objects.filter(code='interrupteur:produits', after=True).exists())
+
+    def test_emergency_stop_forces_the_old_rules(self):
+        from django.test import override_settings
+        from .services import forget_switches
+        RolePermission.objects.filter(role='SHOP_MANAGER', code='products.create').update(allowed=False)
+        self.put(self.admin, '/api/access/switches/', {'module': 'produits', 'enabled': True})
+        with override_settings(PERMISSIONS_FORCE_OLD=True):
+            forget_switches()
+            response = self.call(self.manager, 'post', '/api/products/', {
+                'name': 'Nouveau', 'sku': 'SKU-NEW2', 'category': self.category.id, 'selling_price': 100})
+            self.assertEqual(response.status_code, 201)
+            switches = self.call(self.admin, 'get', '/api/access/switches/').json()
+            self.assertTrue(switches['emergency_stop'])
+            self.assertFalse(next(m for m in switches['modules'] if m['module'] == 'produits')['effective'])
+
+    def test_history_lists_changes(self):
+        self.put(self.admin, '/api/access/roles/', {'role': 'EMPLOYEE', 'code': 'sales.cancel', 'allowed': True})
+        self.put(self.admin, '/api/access/switches/', {'module': 'ventes', 'enabled': True})
+        rows = self.call(self.admin, 'get', '/api/access/history/').json()
+        self.assertEqual(len(rows), 2)
+        self.assertIn('Caisse, ventes et livraisons', rows[0]['label'])
+        self.assertEqual(rows[1]['label'], 'Annuler une vente (avec motif)')
+
+    def test_only_the_super_admin_writes(self):
+        for user in (self.manager, self.employee, self.magasinier, self.livreur):
+            self.assertEqual(self.put(user, '/api/access/roles/', {'role': 'EMPLOYEE', 'code': 'sales.cancel', 'allowed': True}).status_code, 403)
+            self.assertEqual(self.put(user, '/api/access/switches/', {'module': 'ventes', 'enabled': True}).status_code, 403)
+            self.assertEqual(self.call(user, 'get', '/api/access/history/').status_code, 403)

@@ -248,3 +248,5 @@ VAPID_SUBJECT     = config('VAPID_SUBJECT', default='https://shopm.abdelsaliou.d
 # Permissions : modules où la grille décide (sinon anciennes règles). Ex. « boutiques,produits » ou « all ».
 # Marche arrière immédiate : vider la valeur puis redémarrer gunicorn.
 PERMISSIONS_ENFORCE = [m.strip() for m in config('PERMISSIONS_ENFORCE', default='').split(',') if m.strip()]
+# Arrêt d'urgence : true = anciennes règles partout, même si l'écran des permissions a allumé des modules.
+PERMISSIONS_FORCE_OLD = config('PERMISSIONS_FORCE_OLD', default=False, cast=bool)

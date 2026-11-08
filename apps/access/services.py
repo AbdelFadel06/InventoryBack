@@ -65,9 +65,38 @@ SWITCH_BY_PREFIX = {
 SWITCHES = sorted(set(SWITCH_BY_PREFIX.values()))
 
 
-def is_enforced(code):
+SWITCH_CACHE_KEY = 'access:module-switches'
+SWITCH_CACHE_SECONDS = 10   # un changement depuis l'écran s'applique partout en 10 s au plus
+
+
+def emergency_stop():
+    """PERMISSIONS_FORCE_OLD=true dans le .env : anciennes règles partout, quoi que dise l'écran."""
     from django.conf import settings
-    enabled = set(getattr(settings, 'PERMISSIONS_ENFORCE', []) or [])
+    return bool(getattr(settings, 'PERMISSIONS_FORCE_OLD', False))
+
+
+def enabled_modules():
+    """Modules où la grille décide : interrupteurs de l'écran + PERMISSIONS_ENFORCE du .env."""
+    from django.conf import settings
+    from django.core.cache import cache
+
+    if emergency_stop():
+        return set()
+    from_screen = cache.get(SWITCH_CACHE_KEY)
+    if from_screen is None:
+        from .models import ModuleSwitch
+        from_screen = set(ModuleSwitch.objects.filter(enabled=True).values_list('module', flat=True))
+        cache.set(SWITCH_CACHE_KEY, from_screen, SWITCH_CACHE_SECONDS)
+    return set(from_screen) | set(getattr(settings, 'PERMISSIONS_ENFORCE', []) or [])
+
+
+def forget_switches():
+    from django.core.cache import cache
+    cache.delete(SWITCH_CACHE_KEY)
+
+
+def is_enforced(code):
+    enabled = enabled_modules()
     return 'all' in enabled or SWITCH_BY_PREFIX.get(code.split('.', 1)[0]) in enabled
 
 

@@ -55,3 +55,18 @@ class PermissionChange(models.Model):
         verbose_name = "Changement de droit"
         verbose_name_plural = "Journal des droits"
         ordering = ['-created_at']
+
+
+class ModuleSwitch(models.Model):
+    """Interrupteur d'un module : la grille décide (True) ou les anciennes règles (False)."""
+    module = models.CharField(max_length=30, unique=True)
+    enabled = models.BooleanField(default=False)
+    updated_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Interrupteur de module"
+        verbose_name_plural = "Interrupteurs de modules"
+
+    def __str__(self):
+        return f"{self.module} : {'grille' if self.enabled else 'anciennes règles'}"

@@ -95,7 +95,23 @@
   "magasinier": 403,
   "manager": 403
  },
+ "GET access-history": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
  "GET access-roles": {
+  "admin": 200,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "GET access-switches": {
   "admin": 200,
   "anonymous": 401,
   "employee": 403,
@@ -1062,6 +1078,30 @@
   "livreur": 400,
   "magasinier": 400,
   "manager": 400
+ },
+ "PUT access-roles": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "PUT access-switches": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
+ },
+ "PUT access-user": {
+  "admin": 400,
+  "anonymous": 401,
+  "employee": 403,
+  "livreur": 403,
+  "magasinier": 403,
+  "manager": 403
  },
  "PUT accounts:user-detail": {
   "admin": 400,

@@ -147,7 +147,8 @@ class GridReallyDecidesTests(ApiSnapshotTests):
         'GET shops:shop-assignment-history',
         'GET sales:sale-issue-list', 'GET sales:sale-issue-detail', 'POST sales:sale-issue-resolve',
         'GET push-key', 'POST push-subscribe', 'POST push-unsubscribe', 'POST push-test',
-        'GET access-catalog', 'GET access-roles', 'GET access-user',
+        'GET access-catalog', 'GET access-roles', 'GET access-user', 'PUT access-roles', 'PUT access-user',
+        'GET access-switches', 'PUT access-switches', 'GET access-history',
         'POST accounts:password-reset', 'POST accounts:password-reset-confirm',
         'POST token_obtain_pair', 'POST token_refresh',
     }
