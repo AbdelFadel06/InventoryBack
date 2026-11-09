@@ -15,7 +15,7 @@ MATRIX_TO_CODE = {
     'shops_delete': 'shops.delete', 'shops_assign_manager': 'shops.assign_manager',
     'shops_assign_employees': 'shops.assign_staff',
     'products_list': 'products.view', 'products_create': 'products.create', 'products_update': 'products.update',
-    'products_delete': 'products.delete', 'products_bulk_update_prices': 'products.bulk_prices',
+    'products_delete': 'products.delete',
     'categories_create': 'categories.manage',
     'stocks_list': 'stock.view', 'stocks_adjust': 'stock.adjust_warehouse',
     'stocks_adjust_boutique': 'stock.adjust_boutique', 'movements_add_stock': 'stock.movements',

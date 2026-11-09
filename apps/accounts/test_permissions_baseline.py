@@ -193,8 +193,6 @@ MATRIX = [
     ('products_update', 'patch', lambda t: f'/api/products/{t.product.id}/',
      lambda t: {'name': 'Renommé'}, ADMIN_MANAGER),
     ('products_delete', 'delete', lambda t: f'/api/products/{t.product_without_stock.id}/', no_data, ADMIN_MANAGER),
-    ('products_bulk_update_prices', 'post', lambda t: '/api/products/bulk_update_prices/',
-     lambda t: {'product_ids': [t.product.id], 'percentage_increase': 10}, ADMIN_ONLY),
     ('categories_create', 'post', lambda t: '/api/categories/', lambda t: {'name': 'Nouvelle'}, ADMIN_MANAGER),
 
     # ── Stocks ───────────────────────────────────────────────────────
@@ -318,21 +316,6 @@ class ShopIsolationTests(PermissionFixtures):
 
 class FixedFlawTests(PermissionFixtures):
     """Anciens défauts connus, corrigés le 2026-11-09 : ces tests empêchent leur retour."""
-
-    def test_bulk_update_prices_works(self):
-        response = self.call(self.admin, 'post', '/api/products/bulk_update_prices/', {
-            'product_ids': [self.product.id], 'percentage_increase': 10,
-        })
-        self.assertEqual(response.status_code, 200, response.content)
-        self.product.refresh_from_db()
-        self.assertEqual(str(self.product.selling_price), '1100.00')
-
-    def test_bulk_update_prices_refuses_absurd_percentages(self):
-        for value in (-100, -150, 'abc', 'NaN'):
-            response = self.call(self.admin, 'post', '/api/products/bulk_update_prices/', {
-                'product_ids': [self.product.id], 'percentage_increase': value,
-            })
-            self.assertEqual(response.status_code, 400, value)
 
     def test_inventory_of_today_is_accepted_between_midnight_and_1am(self):
         """00 h 30 à Porto-Novo : la date locale est le 2, mais la comparaison se fait en UTC (le 1er)."""

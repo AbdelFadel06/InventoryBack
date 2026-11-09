@@ -1,5 +1,3 @@
-from decimal import Decimal, InvalidOperation
-
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -110,7 +108,6 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
         'add_image': 'products.update', 'remove_image': 'products.update',
         'generate_barcode': 'products.update', 'generate_all_barcodes': 'products.update',
         'destroy': 'products.delete',
-        'bulk_update_prices': 'products.bulk_prices',
     }
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['category', 'shop', 'is_active', 'unit']
@@ -321,54 +318,58 @@ class ProductViewSet(ActiveShopMixin, viewsets.ModelViewSet):
             'total_stock': sum(s['quantity'] for s in stock_data)
         })
 
-    @action(detail=False, methods=['post'], permission_classes=[IsSuperAdmin])
-    def bulk_update_prices(self, request):
-        """
-        Mise à jour en masse des prix
-        POST /api/products/bulk_update_prices/
-
-        Body:
-        {
-            "product_ids": [1, 2, 3],
-            "percentage_increase": 10.5  // Augmentation en %
-        }
-        """
-        product_ids = request.data.get('product_ids', [])
-        percentage = request.data.get('percentage_increase')
-
-        if not product_ids or percentage is None:
-            return Response(
-                {'error': 'product_ids et percentage_increase sont requis.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Decimal (pas float) : le prix est un Decimal, les mélanger faisait planter le calcul.
-        try:
-            percentage = Decimal(str(percentage))
-        except (InvalidOperation, ValueError):
-            return Response(
-                {'error': 'percentage_increase doit être un nombre.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if not percentage.is_finite() or percentage <= -100:
-            return Response(
-                {'error': 'percentage_increase doit être supérieur à -100.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        factor = 1 + percentage / 100
-        products = Product.objects.filter(id__in=product_ids)
-        updated_count = 0
-
-        for product in products:
-            product.selling_price = (product.selling_price * factor).quantize(Decimal('0.01'))
-            product.save()
-            updated_count += 1
-
-        return Response({
-            'message': f'{updated_count} produits mis à jour avec succès.',
-            'percentage_increase': float(percentage)
-        })
+    # ── Changement des prix en masse : mis de côté le 2026-11-09 (pas utile pour l'instant) ──
+    # Le calcul est corrigé (Decimal). Pour le réactiver : décommenter cette action, remettre
+    # 'products.bulk_prices' dans apps/access/catalog.py et dans permission_codes ci-dessus,
+    # puis reprendre la photo de l'API (apps/access/test_api_snapshot.py).
+    # @action(detail=False, methods=['post'], permission_classes=[IsSuperAdmin])
+    # def bulk_update_prices(self, request):
+    #     """
+    #     Mise à jour en masse des prix
+    #     POST /api/products/bulk_update_prices/
+    #
+    #     Body:
+    #     {
+    #         "product_ids": [1, 2, 3],
+    #         "percentage_increase": 10.5  // Augmentation en %
+    #     }
+    #     """
+    #     product_ids = request.data.get('product_ids', [])
+    #     percentage = request.data.get('percentage_increase')
+    #
+    #     if not product_ids or percentage is None:
+    #         return Response(
+    #             {'error': 'product_ids et percentage_increase sont requis.'},
+    #             status=status.HTTP_400_BAD_REQUEST
+    #         )
+    #
+    #     # Decimal (pas float) — nécessite : from decimal import Decimal, InvalidOperation : le prix est un Decimal, les mélanger faisait planter le calcul.
+    #     try:
+    #         percentage = Decimal(str(percentage))
+    #     except (InvalidOperation, ValueError):
+    #         return Response(
+    #             {'error': 'percentage_increase doit être un nombre.'},
+    #             status=status.HTTP_400_BAD_REQUEST
+    #         )
+    #     if not percentage.is_finite() or percentage <= -100:
+    #         return Response(
+    #             {'error': 'percentage_increase doit être supérieur à -100.'},
+    #             status=status.HTTP_400_BAD_REQUEST
+    #         )
+    #
+    #     factor = 1 + percentage / 100
+    #     products = Product.objects.filter(id__in=product_ids)
+    #     updated_count = 0
+    #
+    #     for product in products:
+    #         product.selling_price = (product.selling_price * factor).quantize(Decimal('0.01'))
+    #         product.save()
+    #         updated_count += 1
+    #
+    #     return Response({
+    #         'message': f'{updated_count} produits mis à jour avec succès.',
+    #         'percentage_increase': float(percentage)
+    #     })
 
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):

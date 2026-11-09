@@ -66,7 +66,6 @@ PERMISSIONS = [
     _p('products.create',      'Produits', "Créer un produit",                 CREATE,  ADMIN_MANAGER),
     _p('products.update',      'Produits', "Modifier un produit",              UPDATE,  ADMIN_MANAGER),
     _p('products.delete',      'Produits', "Supprimer un produit",             DELETE,  ADMIN_MANAGER),
-    _p('products.bulk_prices', 'Produits', "Changer les prix en masse",        SPECIAL, ADMIN_ONLY),
     _p('categories.manage',    'Produits', "Gérer les catégories",             SPECIAL, ADMIN_MANAGER),
 
     # ── Stock ─────────────────────────────────────────────────────

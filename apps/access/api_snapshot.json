@@ -799,14 +799,6 @@
   "magasinier": 403,
   "manager": 400
  },
- "POST products:product-bulk-update-prices": {
-  "admin": 400,
-  "anonymous": 401,
-  "employee": 403,
-  "livreur": 403,
-  "magasinier": 403,
-  "manager": 403
- },
  "POST products:product-generate-all-barcodes": {
   "admin": 200,
   "anonymous": 401,
