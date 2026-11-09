@@ -1,26 +1,36 @@
 #!/usr/bin/env bash
-# Installe ou met à jour le staging de ShopM, à côté de la prod et sans y toucher.
+# Installe ou met à jour une instance de ShopM à côté de la prod, sans y toucher :
+#   - le staging (par défaut) : tests, comptes @shopm.test ;
+#   - la démo publique (INSTANCE=demo) : boutique fictive, mode démo, remise à zéro chaque nuit.
 #
-# Écrit uniquement dans : /var/www/shopm-staging, la base shopm_staging, le service
-# shopm-staging et le site nginx shopm-staging. La prod n'est que lue (adresse des dépôts).
+# Écrit uniquement dans : /var/www/shopm-<instance>, la base shopm_<instance>, le service
+# shopm-<instance> et son site nginx. La prod n'est que lue (adresse des dépôts).
 #
 # À lancer sur le VPS avec un utilisateur qui a sudo (pas en root) :
 #   bash setup-staging.sh [branche-backend] [branche-frontend]
-# Relancer le script déploie les branches indiquées sur le staging.
+#   INSTANCE=demo bash setup-staging.sh main main
+# Relancer le script déploie les branches indiquées sur l'instance.
 set -euo pipefail
 
-DOMAIN="shopm-staging.abdelsaliou.dev"
+INSTANCE="${INSTANCE:-staging}"
+case "$INSTANCE" in
+  staging) PORT="8100" ;;
+  demo)    PORT="8200" ;;
+  *) printf 'INSTANCE inconnue : %s (staging ou demo)\n' "$INSTANCE" >&2; exit 1 ;;
+esac
+DOMAIN="shopm-$INSTANCE.abdelsaliou.dev"
 PROD_DOMAIN="shopm.abdelsaliou.dev"
-ROOT="/var/www/shopm-staging"
-PORT="8100"
-SERVICE="shopm-staging"
-SYSTEM_USER="shopm-staging"
-DB_NAME="shopm_staging"
-DB_USER="shopm_staging_user"
+ROOT="/var/www/shopm-$INSTANCE"
+SERVICE="shopm-$INSTANCE"
+SYSTEM_USER="shopm-$INSTANCE"
+DB_NAME="shopm_$INSTANCE"
+DB_USER="shopm_${INSTANCE}_user"
+# Mot de passe PUBLIC des comptes de la démo (affiché sur la landing) : aucune donnée réelle derrière.
+DEMO_PASSWORD="${DEMO_PASSWORD:-Demo-ShopM-2026!}"
 PROD_BACKEND="/var/www/shopm/backend"
 PROD_FRONTEND="/var/www/shopm/frontend"
-BACKEND_BRANCH="${1:-fix/cashier-permissions}"
-FRONTEND_BRANCH="${2:-fix/cashier-permissions}"
+BACKEND_BRANCH="${1:-main}"
+FRONTEND_BRANCH="${2:-main}"
 
 BACKEND_DIR="$ROOT/backend"
 FRONTEND_DIR="$ROOT/frontend"
@@ -108,10 +118,14 @@ DB_USER=$DB_USER
 DB_PASSWORD=$db_password
 DB_HOST=localhost
 DB_PORT=5432
-# Aucun e-mail réel ne part du staging.
+# Aucun e-mail réel ne part de cette instance.
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
-ALLOW_STAGING_SEED=true
 ENV
+    if [[ "$INSTANCE" == "demo" ]]; then
+      printf 'ALLOW_DEMO_SEED=true\nDEMO_MODE=true\nDEMO_PASSWORD=%s\n' "$DEMO_PASSWORD" >> "$ENV_FILE"
+    else
+      printf 'ALLOW_STAGING_SEED=true\n' >> "$ENV_FILE"
+    fi
   )
   sudo chown "$USER:$SYSTEM_USER" "$ENV_FILE"
   chmod 640 "$ENV_FILE"
@@ -144,7 +158,7 @@ install_service() {
   step "Service $SERVICE"
   sudo tee "/etc/systemd/system/$SERVICE.service" >/dev/null <<UNIT
 [Unit]
-Description=Gunicorn pour le staging de ShopM
+Description=Gunicorn pour l'instance $INSTANCE de ShopM
 After=network.target postgresql.service
 
 [Service]
@@ -244,7 +258,7 @@ reload_nginx() {
   if ! sudo nginx -t 2>/dev/null; then
     sudo nginx -t || true
     sudo rm -f "$NGINX_ENABLED"
-    die "configuration nginx invalide : le site du staging a été retiré, nginx n'a pas été rechargé."
+    die "configuration nginx invalide : le site de l'instance a été retiré, nginx n'a pas été rechargé."
   fi
   sudo systemctl reload nginx
 }
@@ -264,8 +278,47 @@ install_nginx_site() {
   reload_nginx
 }
 
+install_demo_reset() {
+  [[ "$INSTANCE" == "demo" ]] || return 0
+  step "Remise à zéro de la démo chaque nuit (3 h)"
+  sudo tee "/etc/systemd/system/$SERVICE-reset.service" >/dev/null <<UNIT
+[Unit]
+Description=Remise à zéro des données de la démo ShopM
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=$SYSTEM_USER
+Group=$SYSTEM_USER
+WorkingDirectory=$BACKEND_DIR
+ExecStart=$PYTHON manage.py seed_demo --reset
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+UNIT
+  sudo tee "/etc/systemd/system/$SERVICE-reset.timer" >/dev/null <<UNIT
+[Unit]
+Description=Remise à zéro de la démo ShopM chaque nuit
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now --quiet "$SERVICE-reset.timer"
+}
+
 seed_first_install() {
   [[ "$FIRST_INSTALL" == "yes" ]] || return 0
+  if [[ "$INSTANCE" == "demo" ]]; then
+    step "Données de la démo"
+    (cd "$BACKEND_DIR" && "$PYTHON" manage.py seed_demo)
+    printf '\nComptes démo (mot de passe public : %s) :\n  demo.manager@shopm.demo, demo.caisse@shopm.demo\n' "$DEMO_PASSWORD"
+    return 0
+  fi
   step "Données fictives et comptes de test"
   local password="Test-$(openssl rand -hex 8)"
   (cd "$BACKEND_DIR" && "$PYTHON" manage.py seed_staging --password "$password")
@@ -279,12 +332,12 @@ check_result() {
   staging_api="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "https://$DOMAIN/api/token/")"
   staging_app="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/")"
   prod_app="$(curl -s -o /dev/null -w '%{http_code}' "https://$PROD_DOMAIN/")"
-  echo "Staging, connexion API (400 attendu) : $staging_api"
-  echo "Staging, application (200 attendu)   : $staging_app"
+  echo "Instance $INSTANCE, connexion API (400 attendu) : $staging_api"
+  echo "Instance $INSTANCE, application (200 attendu)   : $staging_app"
   echo "Prod, application (200 attendu)      : $prod_app"
   [[ "$staging_api" == "400" && "$staging_app" == "200" && "$prod_app" == "200" ]] \
     || die "un des contrôles ne donne pas le résultat attendu."
-  printf '\nStaging prêt : https://%s\n' "$DOMAIN"
+  printf '\nInstance %s prête : https://%s\n' "$INSTANCE" "$DOMAIN"
 }
 
 check_prerequisites
@@ -296,4 +349,5 @@ install_service
 deploy_frontend
 install_nginx_site
 seed_first_install
+install_demo_reset
 check_result

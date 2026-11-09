@@ -77,6 +77,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'config.demo.DemoModeMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -250,3 +251,6 @@ VAPID_SUBJECT     = config('VAPID_SUBJECT', default='https://shopm.abdelsaliou.d
 PERMISSIONS_ENFORCE = [m.strip() for m in config('PERMISSIONS_ENFORCE', default='').split(',') if m.strip()]
 # Arrêt d'urgence : true = anciennes règles partout, même si l'écran des permissions a allumé des modules.
 PERMISSIONS_FORCE_OLD = config('PERMISSIONS_FORCE_OLD', default=False, cast=bool)
+
+# Instance de démo publique uniquement : bloque les actions qui gêneraient les autres visiteurs.
+DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
