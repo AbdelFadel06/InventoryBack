@@ -192,6 +192,10 @@ VITE_API_URL=https://$DOMAIN/api
 VITE_CLOUDINARY_CLOUD_NAME=
 VITE_CLOUDINARY_UPLOAD_PRESET=
 ENV
+  # Démo seulement : la page de connexion propose les profils démo, champs préremplis.
+  if [[ "$INSTANCE" == "demo" ]]; then
+    printf 'VITE_DEMO_PASSWORD=%s\n' "$DEMO_PASSWORD" >> "$FRONTEND_DIR/.env.production.local"
+  fi
   cd "$FRONTEND_DIR"
   nice -n 10 npm ci --no-audit --no-fund
   NODE_OPTIONS=--max-old-space-size=768 nice -n 10 npm run build
