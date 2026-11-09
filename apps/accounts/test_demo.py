@@ -48,6 +48,12 @@ class SeedDemoTests(TestCase):
         response = client.post('/api/token/', {'email': 'demo.manager@shopm.demo', 'password': PASSWORD}, format='json')
         self.assertEqual(response.status_code, 200, response.content)
 
+    def test_default_photos_match_real_products(self):
+        from apps.accounts.management.commands.seed_demo import CATALOGUE, DEFAULT_PHOTOS
+        names = {name for items in CATALOGUE.values() for name, _, _ in items}
+        self.assertEqual(set(DEFAULT_PHOTOS) - names, set())
+        self.assertTrue(all(v.startswith('photo-') for v in DEFAULT_PHOTOS.values()))
+
     def test_refuses_to_mix_with_existing_data_without_reset(self):
         Shop.objects.create(name='Vraie boutique')
         with self.assertRaises(CommandError):
@@ -75,6 +81,7 @@ class SeedDemoResetTests(TransactionTestCase):
                 patch.dict(os.environ, {'DEMO_IMAGES_FILE': os.path.join(folder, 'images.json')}):
             seed()
             casserole = Product.objects.get(name='Casserole inox 24 cm')
+            casserole.images.all().delete()  # on remplace la photo par défaut par les nôtres
             ProductImage.objects.create(product=casserole, url='https://res.cloudinary.com/x/casserole.jpg')
             ProductImage.objects.create(product=casserole, url='https://res.cloudinary.com/x/casserole-2.jpg')
             seed('--save-images')
@@ -94,7 +101,12 @@ class SeedDemoResetTests(TransactionTestCase):
                 patch.dict(os.environ, {'DEMO_IMAGES_FILE': os.path.join(folder, 'absent.json')}):
             seed('--reset')
             self.assertEqual(Product.objects.count(), 34)
-            self.assertEqual(ProductImage.objects.count(), 0)
+            # Photos par défaut : une par produit sauf la bassine, toutes principales.
+            self.assertEqual(ProductImage.objects.count(), 33)
+            self.assertEqual(ProductImage.objects.filter(is_primary=True).count(), 33)
+            self.assertFalse(ProductImage.objects.filter(product__name='Bassine plastique 40 L').exists())
+            self.assertTrue(ProductImage.objects.filter(product__name='Balai et pelle',
+                                                        url__startswith='https://images.unsplash.com/photo-').exists())
 
 
 @override_settings(DEMO_MODE=True)

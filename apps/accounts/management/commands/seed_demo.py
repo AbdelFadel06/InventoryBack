@@ -51,6 +51,46 @@ SHOPS = {
 }
 
 # (identifiant, rôle, prénom, nom)
+# Photos par défaut (Unsplash, licence libre, usage commercial sans attribution), par nom de produit.
+# Une photo enregistrée avec --save-images prime sur celle-ci. Pas de photo pour la bassine.
+UNSPLASH = 'https://images.unsplash.com/'
+PHOTO_PARAMS = '?auto=format&fit=crop&w=800&h=800&q=75'
+DEFAULT_PHOTOS = {
+    'Casserole inox 24 cm': 'photo-1693038603562-bb6191269ecc',
+    'Poêle antiadhésive 28 cm': 'photo-1592156328697-079f6ee0cfa5',
+    'Marmite en fonte 6 L': 'photo-1766746842414-e7a999ca83ce',
+    'Set de 6 couteaux': 'photo-1563559983710-47af8035e4be',
+    'Planche à découper bambou': 'photo-1683570687112-90cbc0fd5019',
+    'Service à thé 12 pièces': 'photo-1592304502437-178c9adcf9ca',
+    'Verres à eau (x6)': 'photo-1554140426-5e830b73a5e8',
+    'Assiettes plates (x6)': 'photo-1727021024931-90c226e8448d',
+    'Thermos 1,5 L': 'photo-1613645540553-d98859ffeec5',
+    'Mixeur 1,5 L': 'photo-1654064754916-e3edeb09c042',
+    'Bouilloire électrique 1,7 L': 'photo-1592417766326-088bf3da80c5',
+    'Ventilateur sur pied': 'photo-1612549672719-2f1a3908ae31',
+    'Fer à repasser vapeur': 'photo-1611090925566-b1fc31065f63',
+    'Réchaud à gaz 2 feux': 'photo-1629234358103-5b5ee53ece9c',
+    'Cuiseur à riz 1,8 L': 'photo-1599182345361-9542815e73f6',
+    'Drap 2 places': 'photo-1762199904164-fff3ac17fc9e',
+    'Serviette de bain': 'photo-1616663717839-2fea42e1a1f6',
+    'Rideau occultant': 'photo-1528822855841-e8bf3134cdc9',
+    'Nappe 6 couverts': 'photo-1696673022696-f6d89dc9f96b',
+    'Moustiquaire imprégnée': 'photo-1747056032562-1c73b853a79d',
+    'Oreiller': 'photo-1584100936595-c0654b55a2e2',
+    'Tapis de salon 160x230': 'photo-1534889156217-d643df14f14a',
+    'Miroir mural': 'photo-1619378396304-7ef156537d7e',
+    'Lampe de chevet': 'photo-1570974802254-4b0ad1a755f5',
+    'Horloge murale': 'photo-1563861826100-9cb868fdbe1c',
+    'Panier de rangement': 'photo-1787074629663-1048a1cec018',
+    'Pot de fleurs céramique': 'photo-1588440691140-09155c1be58a',
+    'Balai et pelle': 'photo-1585059895825-37c0b49b61a7',
+    'Seau essoreur': 'photo-1689127903369-aef916b0c40d',
+    'Savon liquide 5 L': 'photo-1787618580858-1bac2d9e167d',
+    'Éponges (x10)': 'photo-1778178965223-e5a29e612504',
+    'Désodorisant': 'photo-1632243575963-3143700087ed',
+    'Gants de ménage': 'photo-1616524617587-2ddb5ccf87cc',
+}
+
 ACCOUNTS = [
     ('manager',    'SHOP_MANAGER', 'Aïcha',  'Dossou'),
     ('caisse',     'EMPLOYEE',     'Koffi',  'Agbo'),
@@ -212,20 +252,18 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'{len(saved)} produits avec photo enregistrés dans {path}.'))
 
     def _restore_images(self, products):
+        saved = {}
         path = self._images_file()
-        if not path.exists():
-            return
-        try:
-            saved = json.loads(path.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            self.stderr.write(f'Photos ignorées : {path} illisible.')
-            return
-        by_sku = {product.sku: product for product in products}
-        for sku, urls in saved.items():
-            product = by_sku.get(sku)
-            if not product:
-                continue
-            for order, url in enumerate(urls[:5]):
+        if path.exists():
+            try:
+                saved = json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                self.stderr.write(f'Photos enregistrées ignorées : {path} illisible.')
+        for product in products:
+            urls = saved.get(product.sku)
+            if not urls and product.name in DEFAULT_PHOTOS:
+                urls = [UNSPLASH + DEFAULT_PHOTOS[product.name] + PHOTO_PARAMS]
+            for order, url in enumerate((urls or [])[:5]):
                 if isinstance(url, str) and url.startswith('https://'):
                     ProductImage.objects.create(product=product, url=url, is_primary=order == 0, order=order)
 
