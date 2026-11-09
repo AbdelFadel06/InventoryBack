@@ -1,5 +1,6 @@
 """Démo publique : données crédibles, remise à zéro, et mode démo qui protège les comptes partagés."""
 import os
+import tempfile
 from io import StringIO
 from unittest.mock import patch
 
@@ -11,7 +12,7 @@ from rest_framework.test import APIClient
 
 from apps.access.models import RolePermission
 from apps.accounts.models import User
-from apps.products.models import Product
+from apps.products.models import Product, ProductImage
 from apps.sales.models import Sale, SaleIssue
 from apps.shops.models import Shop
 from apps.stocks.models import Stock
@@ -68,6 +69,32 @@ class SeedDemoResetTests(TransactionTestCase):
         self.assertEqual(Shop.objects.filter(name='Maison Akwaba').count(), 1)
         self.assertGreater(Sale.objects.count(), 200)
         self.assertTrue(RolePermission.objects.filter(role='SHOP_MANAGER', code='sales.cancel', allowed=True).exists())
+
+    def test_saved_photos_survive_the_reset_but_visitor_photos_do_not(self):
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.dict(os.environ, {'DEMO_IMAGES_FILE': os.path.join(folder, 'images.json')}):
+            seed()
+            casserole = Product.objects.get(name='Casserole inox 24 cm')
+            ProductImage.objects.create(product=casserole, url='https://res.cloudinary.com/x/casserole.jpg')
+            ProductImage.objects.create(product=casserole, url='https://res.cloudinary.com/x/casserole-2.jpg')
+            seed('--save-images')
+            # Un visiteur ajoute une photo après la sauvegarde : elle ne doit pas revenir.
+            balai = Product.objects.get(name='Balai et pelle')
+            ProductImage.objects.create(product=balai, url='https://res.cloudinary.com/x/visiteur.jpg')
+
+            seed('--reset')
+            urls = list(ProductImage.objects.filter(product__name='Casserole inox 24 cm')
+                        .order_by('order').values_list('url', 'is_primary'))
+            self.assertEqual(urls, [('https://res.cloudinary.com/x/casserole.jpg', True),
+                                    ('https://res.cloudinary.com/x/casserole-2.jpg', False)])
+            self.assertFalse(ProductImage.objects.filter(url__contains='visiteur').exists())
+
+    def test_reset_works_without_saved_photos(self):
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.dict(os.environ, {'DEMO_IMAGES_FILE': os.path.join(folder, 'absent.json')}):
+            seed('--reset')
+            self.assertEqual(Product.objects.count(), 34)
+            self.assertEqual(ProductImage.objects.count(), 0)
 
 
 @override_settings(DEMO_MODE=True)

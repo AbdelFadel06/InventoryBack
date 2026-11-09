@@ -7,25 +7,33 @@ Refuse de tourner sans ALLOW_DEMO_SEED=true, à ne JAMAIS définir en production
 
     python manage.py seed_demo --password '<mot de passe public de la démo>'
     python manage.py seed_demo --reset   # chaque nuit : vide la base puis recrée tout (DEMO_PASSWORD du .env)
+    python manage.py seed_demo --save-images   # garde les photos actuelles des produits pour les remises à zéro
+
+Photos : --save-images enregistre les photos des produits (par référence AKW-xxx) dans
+demo_data/images.json (ou DEMO_IMAGES_FILE). Chaque remise à zéro les réapplique : les photos
+validées restent, celles ajoutées ensuite par les visiteurs disparaissent la nuit suivante.
 
 Les données sont tirées au hasard avec une graine fixe : chaque nuit, la démo repart
 du même état, décalé au jour courant.
 """
+import json
 import random
 from datetime import datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from decouple import config
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
 from apps.inventories.models import Inventory, InventoryLine
-from apps.products.models import Category, Product
+from apps.products.models import Category, Product, ProductImage
 from apps.sales.models import CashierSession, Expense, Sale, SaleIssue, SaleItem
 from apps.shops.models import Shop
 from apps.stocks.models import Stock, StockMovement, StockTransfer
@@ -101,12 +109,16 @@ class Command(BaseCommand):
         parser.add_argument('--password', default=None,
                             help="Mot de passe public des comptes démo (sinon DEMO_PASSWORD du .env).")
         parser.add_argument('--reset', action='store_true', help="Vide entièrement la base avant de recréer.")
+        parser.add_argument('--save-images', action='store_true',
+                            help="Enregistre les photos actuelles des produits pour les prochaines remises à zéro.")
 
     def handle(self, *args, **options):
         if not config('ALLOW_DEMO_SEED', default=False, cast=bool):
             raise CommandError(
                 "Refusé : ALLOW_DEMO_SEED n'est pas activé. Cette commande ne doit jamais tourner en production."
             )
+        if options['save_images']:
+            return self._save_images()
         options['password'] = options['password'] or config('DEMO_PASSWORD', default='')
         if not options['password']:
             raise CommandError("Mot de passe manquant : --password ou DEMO_PASSWORD dans le .env.")
@@ -127,6 +139,7 @@ class Command(BaseCommand):
             shops = self._shops()
             users = self._users(shops, options['password'])
             products = self._catalogue(shops['main'], users['manager'])
+            self._restore_images(products)
             self._initial_stock(shops['main'], products, users['magasinier'])
             self._history(shops['main'], products, users)
             self._transfers(shops['main'], products, users)
@@ -180,6 +193,41 @@ class Command(BaseCommand):
                 ))
                 number += 1
         return products
+
+    # ── Photos des produits (gardées d'une remise à zéro à l'autre) ────────
+    @staticmethod
+    def _images_file():
+        default = settings.BASE_DIR / 'demo_data' / 'images.json'
+        return Path(config('DEMO_IMAGES_FILE', default=str(default)))
+
+    def _save_images(self):
+        saved = {}
+        for product in Product.objects.filter(sku__startswith='AKW-').prefetch_related('images'):
+            images = sorted(product.images.all(), key=lambda i: (not i.is_primary, i.order, i.id))
+            if images:
+                saved[product.sku] = [image.url for image in images]
+        path = self._images_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(saved, indent=2, ensure_ascii=False), encoding='utf-8')
+        self.stdout.write(self.style.SUCCESS(f'{len(saved)} produits avec photo enregistrés dans {path}.'))
+
+    def _restore_images(self, products):
+        path = self._images_file()
+        if not path.exists():
+            return
+        try:
+            saved = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            self.stderr.write(f'Photos ignorées : {path} illisible.')
+            return
+        by_sku = {product.sku: product for product in products}
+        for sku, urls in saved.items():
+            product = by_sku.get(sku)
+            if not product:
+                continue
+            for order, url in enumerate(urls[:5]):
+                if isinstance(url, str) and url.startswith('https://'):
+                    ProductImage.objects.create(product=product, url=url, is_primary=order == 0, order=order)
 
     def _movement(self, when, **fields):
         movement = StockMovement.objects.create(**fields)

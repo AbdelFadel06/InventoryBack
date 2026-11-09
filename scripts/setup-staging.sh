@@ -149,8 +149,8 @@ deploy_backend() {
   "$PYTHON" manage.py collectstatic --no-input --verbosity 0
 
   # Le service n'écrit que dans les dossiers d'images envoyées.
-  mkdir -p profile_pictures shop_logos
-  sudo chown -R "$SYSTEM_USER:$SYSTEM_USER" profile_pictures shop_logos
+  mkdir -p profile_pictures shop_logos demo_data
+  sudo chown -R "$SYSTEM_USER:$SYSTEM_USER" profile_pictures shop_logos demo_data
   cd - >/dev/null
 }
 
