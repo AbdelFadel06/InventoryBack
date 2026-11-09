@@ -183,15 +183,35 @@ UNIT
   sudo systemctl restart "$SERVICE"
 }
 
+# Lit une variable Cloudinary : d'abord $ROOT/cloudinary.env, puis les fichiers .env de la prod.
+cloudinary_value() {
+  local key="$1" f v
+  for f in "$ROOT/cloudinary.env" "$PROD_FRONTEND/.env.production.local" "$PROD_FRONTEND/.env.production" "$PROD_FRONTEND/.env"; do
+    [[ -r "$f" ]] || continue
+    v="$(grep -E "^${key}=" "$f" | tail -1 | cut -d= -f2- | tr -d '"'"'"'\r' | xargs)"
+    if [[ -n "$v" ]]; then printf '%s' "$v"; return; fi
+  done
+}
+
 deploy_frontend() {
   step "Frontend : compilation (plus lente, le serveur reste disponible)"
   # .env.production.local prime sur le .env du dépôt et n'est pas suivi par git.
-  # Cloudinary reste vide : aucune image de test n'arrive sur le compte de la prod.
+  # Cloudinary : $ROOT/cloudinary.env s'il existe (compte ou preset dédié), sinon les réglages
+  # de la prod. Les photos vont dans un dossier à part (shopm-<instance>/...). Jamais affichés.
+  local cloud_name preset
+  cloud_name="$(cloudinary_value VITE_CLOUDINARY_CLOUD_NAME)"
+  preset="$(cloudinary_value VITE_CLOUDINARY_UPLOAD_PRESET)"
   cat > "$FRONTEND_DIR/.env.production.local" <<ENV
 VITE_API_URL=https://$DOMAIN/api
-VITE_CLOUDINARY_CLOUD_NAME=
-VITE_CLOUDINARY_UPLOAD_PRESET=
+VITE_CLOUDINARY_CLOUD_NAME=$cloud_name
+VITE_CLOUDINARY_UPLOAD_PRESET=$preset
+VITE_CLOUDINARY_FOLDER_PREFIX=shopm-$INSTANCE
 ENV
+  if [[ -n "$cloud_name" && -n "$preset" ]]; then
+    printf '  Photos : Cloudinary actif (dossier shopm-%s)\n' "$INSTANCE"
+  else
+    printf '  Photos : Cloudinary non trouvé, envoi de photos désactivé\n'
+  fi
   # Démo seulement : la page de connexion propose les profils démo, champs préremplis.
   if [[ "$INSTANCE" == "demo" ]]; then
     printf 'VITE_DEMO_PASSWORD=%s\n' "$DEMO_PASSWORD" >> "$FRONTEND_DIR/.env.production.local"
