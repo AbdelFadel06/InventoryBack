@@ -57,6 +57,10 @@ class SeedDemoTests(TestCase):
 class SeedDemoResetTests(TransactionTestCase):
     """La remise à zéro vide la base (flush) : à tester hors transaction, comme en vrai."""
 
+    # Le flush vide aussi les données posées par les migrations (grille des permissions) :
+    # on les sauvegarde avant et on les restaure après, pour ne pas casser les tests suivants.
+    serialized_rollback = True
+
     def test_reset_starts_again_and_keeps_the_permission_grid(self):
         seed()
         Sale.objects.all().delete()
